@@ -8,11 +8,12 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
-import { Scissors, CreditCard, Banknote, Wallet } from "lucide-react-native";
+import { Scissors, CreditCard, Banknote, Wallet, WifiOff } from "lucide-react-native";
 
 const DEFAULT_TZ = "Australia/Brisbane";
 
@@ -48,10 +49,13 @@ export default function MyDayScreen() {
   const [checkoutId, setCheckoutId] = useState<string | null>(null);
   const [completingMethod, setCompletingMethod] = useState<string | null>(null);
   const [justCompletedId, setJustCompletedId] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
 
   const shopNow = toZonedTime(new Date(), DEFAULT_TZ);
   const today = format(shopNow, "yyyy-MM-dd");
   const hour = shopNow.getHours();
+
+  const cacheKey = `nova_myday_${barberId}_${today}`;
 
   const fetchAppointments = useCallback(async () => {
     if (!barberId) return;
@@ -68,9 +72,23 @@ export default function MyDayScreen() {
       .order("start_time");
     if (!error && data) {
       setAppointments(data as any);
+      setIsOffline(false);
+      // Cache successful fetch
+      try {
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+      } catch {}
+    } else if (error) {
+      // Network error — load from cache
+      try {
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) {
+          setAppointments(JSON.parse(cached) as Appointment[]);
+          setIsOffline(true);
+        }
+      } catch {}
     }
     setLoading(false);
-  }, [barberId, today]);
+  }, [barberId, today, cacheKey]);
 
   useEffect(() => {
     fetchAppointments();
@@ -139,6 +157,15 @@ export default function MyDayScreen() {
       <View style={styles.greetingContainer}>
         <Text style={styles.greeting}>{greeting}</Text>
       </View>
+
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <View pointerEvents="none">
+            <WifiOff color="rgba(245,243,239,0.4)" size={14} />
+          </View>
+          <Text style={styles.offlineText}>Offline — showing cached data</Text>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scrollView}
@@ -278,6 +305,22 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 14,
     color: "#94A3B8",
+  },
+  offlineBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#2E323B",
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginBottom: 4,
+    borderRadius: 6,
+  },
+  offlineText: {
+    fontFamily: "Satoshi-Regular",
+    fontSize: 12,
+    color: "rgba(245,243,239,0.4)",
   },
   scrollView: {
     flex: 1,
