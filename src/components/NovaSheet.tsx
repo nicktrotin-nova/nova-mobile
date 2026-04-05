@@ -42,6 +42,8 @@ import {
   Dimensions,
   Animated,
   Easing,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { X } from "lucide-react-native";
 import { colors, LABEL, MUTED } from "../theme/colors";
@@ -192,12 +194,15 @@ export default function NovaSheet({
     : { maxHeight: computedMaxHeight };
 
   const sheetInner = (
-    <>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.keyboardAvoid}
+    >
       {handleView}
       {headerContent}
       {bodyContent}
       {footer}
-    </>
+    </KeyboardAvoidingView>
   );
 
   // ── Render ──
@@ -268,7 +273,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   scrimLayer: {
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: colors.black50,
   },
   scrimTap: {
     flex: 1,
@@ -310,6 +315,9 @@ const styles = StyleSheet.create({
   },
   scroll: {},
   bodyNoScroll: {
+    flex: 1,
+  },
+  keyboardAvoid: {
     flex: 1,
   },
 });

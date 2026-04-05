@@ -142,6 +142,7 @@ export default function WalletScreen() {
     pending: number;
   } | null>(null);
   const [cashingOut, setCashingOut] = useState(false);
+  const [stripeError, setStripeError] = useState(false);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const countUpAnim = useRef(new Animated.Value(0)).current;
@@ -219,19 +220,22 @@ export default function WalletScreen() {
     setActiveLease((leaseRes.data ?? null) as ActiveLease | null);
 
     // Extract first name
-    const fullName = (barberRes.data as any)?.name ?? null;
+    const barberData = barberRes.data as { name: string } | null;
+    const fullName = barberData?.name ?? null;
     if (fullName) {
       setBarberFirstName(fullName.split(" ")[0] ?? null);
     }
 
     // Sum last week
-    const lwTotal = ((lastWeekRes.data as any[]) ?? []).reduce(
-      (sum: number, a: any) => sum + Number(a.price_charged ?? 0),
+    const lastWeekData = (lastWeekRes.data ?? []) as { price_charged: number | null }[];
+    const lwTotal = lastWeekData.reduce(
+      (sum, a) => sum + Number(a.price_charged ?? 0),
       0,
     );
     setLastWeekTotal(lwTotal);
 
     // Fetch Stripe balance (non-blocking — wallet works without it)
+    setStripeError(false);
     supabase.functions
       .invoke("get-wallet-balance", { body: { barber_id: barberId } })
       .then(({ data }) => {
@@ -244,7 +248,7 @@ export default function WalletScreen() {
         }
       })
       .catch(() => {
-        // Stripe balance is supplementary — don't block the screen
+        setStripeError(true);
       });
   }, [barberId]);
 
@@ -550,6 +554,13 @@ export default function WalletScreen() {
         </ViewShot>
 
         {/* ── Stripe Wallet Balance ── */}
+        {stripeError && !isSharing && (
+          <View style={[styles.stripeCard, { alignItems: "center", paddingVertical: 14 }]}>
+            <Text style={{ color: "#F5F3EF99", fontSize: 13, fontFamily: "Satoshi-Regular" }}>
+              Couldn't load wallet balance — pull to refresh
+            </Text>
+          </View>
+        )}
         {stripeBalance?.connected && !isSharing && (
           <View style={styles.stripeCard}>
             <View style={styles.stripeBalanceRow}>

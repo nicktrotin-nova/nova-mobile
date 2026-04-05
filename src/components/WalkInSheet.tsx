@@ -656,6 +656,7 @@ export default function WalkInSheet({
                 <TouchableOpacity
                   onPress={() => {
                     setActiveCategory(null);
+                    setSelectedSlot(null);
                     transitionToStep(1);
                   }}
                   activeOpacity={0.85}
@@ -706,7 +707,10 @@ export default function WalkInSheet({
                   </TouchableOpacity>
                 </ScrollView>
                 <TouchableOpacity
-                  onPress={() => transitionToStep(2)}
+                  onPress={() => {
+                    setSelectedSlot(null);
+                    transitionToStep(2);
+                  }}
                   activeOpacity={0.85}
                   delayPressIn={0}
                   style={styles.backBtn}
@@ -805,7 +809,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: "rgba(0,214,143,0.10)",
+    backgroundColor: colors.nova10,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -921,7 +925,7 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     marginTop: 12,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: colors.white08,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -951,8 +955,8 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: colors.white10,
+    backgroundColor: colors.white06,
     color: LABEL,
     fontSize: 14,
     paddingHorizontal: 14,
@@ -970,7 +974,7 @@ const styles = StyleSheet.create({
     backgroundColor: NOVA_GREEN,
   },
   bookBtnDisabled: {
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.white06,
   },
   bookBtnText: {
     fontSize: 14,

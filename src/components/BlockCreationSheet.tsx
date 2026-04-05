@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
+  Alert,
 } from "react-native";
 import { format, parse } from "date-fns";
 import { Clock, Repeat, ChevronDown } from "lucide-react-native";
@@ -107,10 +108,12 @@ export default function BlockCreationSheet({
       .insert(payload);
 
     setSaving(false);
-    if (!error) {
-      onCreated();
-      onClose();
+    if (error) {
+      Alert.alert("Could not block time", error.message);
+      return;
     }
+    onCreated();
+    onClose();
   }, [saving, barberId, date, reason, recurrence, isAllDay, resolvedStart, endTime, onCreated, onClose]);
 
   return (
@@ -309,8 +312,8 @@ const styles = StyleSheet.create({
     borderColor: colors.borderMedium,
   },
   pillActive: {
-    backgroundColor: "rgba(245,243,239,0.10)",
-    borderColor: "rgba(245,243,239,0.25)",
+    backgroundColor: colors.warmWhite10,
+    borderColor: colors.warmWhite25,
   },
   pillText: {
     fontSize: 13,
@@ -369,8 +372,8 @@ const styles = StyleSheet.create({
     borderColor: colors.borderMedium,
   },
   recurrencePillActive: {
-    backgroundColor: "rgba(245,243,239,0.10)",
-    borderColor: "rgba(245,243,239,0.25)",
+    backgroundColor: colors.warmWhite10,
+    borderColor: colors.warmWhite25,
   },
   recurrencePillText: {
     fontSize: 12,

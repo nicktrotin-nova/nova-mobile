@@ -8,6 +8,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
+  Alert,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -24,6 +26,8 @@ import {
   Users,
   Building2,
   UserPlus,
+  CreditCard,
+  CircleCheck,
 } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -37,12 +41,13 @@ import { useScreenData } from "../hooks/useScreenData";
 import InviteBarberSheet from "../components/owner/InviteBarberSheet";
 
 const ICON_ROW = colors.textSecondary;
-const CHEVRON = "rgba(255,255,255,0.15)";
+const CHEVRON = colors.white15;
 
 interface BarberRow {
   name: string;
   display_name: string | null;
   avatar_url: string | null;
+  stripe_account_id: string | null;
 }
 
 type MoreStackDest = Exclude<keyof MoreStackParamList, "MoreMenu">;
@@ -69,7 +74,7 @@ export default function MoreScreen() {
     if (!barberId) return;
     const { data, error } = await supabase
       .from("barbers")
-      .select("name, display_name, avatar_url")
+      .select("name, display_name, avatar_url, stripe_account_id")
       .eq("id", barberId)
       .maybeSingle();
 
@@ -173,6 +178,12 @@ export default function MoreScreen() {
           onPress={() => openMoreStack("Clients")}
         />
         <MenuRow
+          icon={<CreditCard size={20} color={ICON_ROW} />}
+          label="Payments"
+          badge={barber?.stripe_account_id ? "connected" : "action"}
+          onPress={() => openMoreStack("StripeOnboarding")}
+        />
+        <MenuRow
           icon={<Settings size={20} color={ICON_ROW} />}
           label="Calendar Settings"
           onPress={() => openMoreStack("CalendarSettings")}
@@ -201,12 +212,19 @@ export default function MoreScreen() {
         <MenuRow
           icon={<Download size={20} color={ICON_ROW} />}
           label="Export My Data"
-          onPress={() => {}}
+          onPress={() => {
+            Alert.alert(
+              "Coming soon",
+              "We're working on this. Your data belongs to you — export will be available soon.",
+            );
+          }}
         />
         <MenuRow
           icon={<HelpCircle size={20} color={ICON_ROW} />}
           label="Help & Support"
-          onPress={() => {}}
+          onPress={() => {
+            void Linking.openURL("mailto:help@getnova.com.au?subject=Nova Support");
+          }}
         />
 
         <Text style={styles.sectionLabel}>Account</Text>
@@ -237,10 +255,12 @@ export default function MoreScreen() {
 function MenuRow({
   icon,
   label,
+  badge,
   onPress,
 }: {
   icon: ReactNode;
   label: string;
+  badge?: "connected" | "action";
   onPress: () => void;
 }) {
   return (
@@ -256,6 +276,17 @@ function MenuRow({
       <Text style={styles.menuLabel} pointerEvents="none" selectable={false}>
         {label}
       </Text>
+      {badge === "connected" && (
+        <View pointerEvents="none" style={styles.badgeConnected}>
+          <CircleCheck size={14} color="#4ADE80" />
+          <Text style={styles.badgeConnectedText}>Connected</Text>
+        </View>
+      )}
+      {badge === "action" && (
+        <View pointerEvents="none" style={styles.badgeAction}>
+          <Text style={styles.badgeActionText}>Set up</Text>
+        </View>
+      )}
       <View pointerEvents="none">
         <ChevronRight size={16} color={CHEVRON} strokeWidth={2} />
       </View>
@@ -360,6 +391,29 @@ const styles = StyleSheet.create({
     color: LABEL,
     marginLeft: 14,
     flex: 1,
+  },
+  badgeConnected: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  badgeConnectedText: {
+    fontSize: 12,
+    fontFamily: "Satoshi-Regular",
+    color: "#4ADE80",
+    marginLeft: 4,
+  },
+  badgeAction: {
+    backgroundColor: "rgba(0, 214, 143, 0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  badgeActionText: {
+    fontSize: 12,
+    fontFamily: "Satoshi-Medium",
+    color: NOVA_GREEN,
   },
   signOutLabel: {
     fontSize: 15,

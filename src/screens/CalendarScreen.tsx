@@ -20,6 +20,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { RootTabParamList } from "../navigation/RootTabParamList";
 import { format, addDays } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
@@ -63,7 +64,7 @@ import type { AptLayout, BlockLayout } from "./calendar/calendarConstants";
 
 export default function CalendarScreen() {
   const { barberId, shopId } = useAuth();
-  const navigation = useNavigation();
+  const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList, "Calendar">>();
   const route = useRoute<RouteProp<RootTabParamList, "Calendar">>();
   const screenRef = useRef<View>(null);
   const teamScrollRef = useRef<ScrollView>(null);
@@ -126,6 +127,13 @@ export default function CalendarScreen() {
   const [showBlockCreation, setShowBlockCreation] = useState(false);
   const [blockCreationTime, setBlockCreationTime] = useState<string | undefined>(undefined);
   const [prefillClient, setPrefillClient] = useState<{ name: string; phone: string } | null>(null);
+
+  const closeAllSheets = useCallback(() => {
+    setShowDetail(false);
+    setShowBlockDetail(false);
+    setShowCreateBooking(false);
+    setShowBlockCreation(false);
+  }, []);
   const [gridViewportH, setGridViewportH] = useState(
     Dimensions.get("window").height * 0.45,
   );
@@ -171,19 +179,20 @@ export default function CalendarScreen() {
     if (barbers.length === 0) return;
     if (selectedBarberId && barbers.some((b) => b.id === selectedBarberId)) return;
     const match = barbers.find((b) => b.id === barberId);
-    setSelectedBarberId(match ? match.id : barbers[0].id);
+    setSelectedBarberId(match ? match.id : barbers[0]?.id ?? null);
   }, [barbers, barberId]);
 
   // "Book again" prefill from ClientsScreen
   useEffect(() => {
     const params = route.params;
     if (params?.prefillClientName) {
+      closeAllSheets();
       setPrefillClient({
         name: params.prefillClientName,
         phone: params.prefillClientPhone ?? "",
       });
       setShowCreateBooking(true);
-      navigation.setParams({ prefillClientName: undefined, prefillClientPhone: undefined } as any);
+      navigation.setParams({ prefillClientName: undefined, prefillClientPhone: undefined });
     }
   }, [route.params, navigation]);
 
@@ -229,13 +238,15 @@ export default function CalendarScreen() {
   });
 
   const onAppointmentTap = useCallback((apt: AptLayout) => {
+    closeAllSheets();
     setSelectedAppointment(apt);
     setShowDetail(true);
-  }, []);
+  }, [closeAllSheets]);
   const onBlockTap = useCallback((blk: BlockLayout) => {
+    closeAllSheets();
     setSelectedBlock(blk);
     setShowBlockDetail(true);
-  }, []);
+  }, [closeAllSheets]);
 
   const {
     responderProps,
@@ -753,6 +764,7 @@ export default function CalendarScreen() {
                               `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
                             );
                             setSlotMenu(null);
+                            closeAllSheets();
                             setShowCreateBooking(true);
                           }}
                         >
@@ -769,6 +781,7 @@ export default function CalendarScreen() {
                               `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
                             );
                             setSlotMenu(null);
+                            closeAllSheets();
                             setShowBlockCreation(true);
                           }}
                         >
@@ -808,6 +821,7 @@ export default function CalendarScreen() {
           <TouchableOpacity
             onPress={() => {
               if (selectedBarberId ?? barberId) {
+                closeAllSheets();
                 setCreateBookingTime(undefined);
                 setShowCreateBooking(true);
               }

@@ -609,7 +609,10 @@ export default function CreateBookingSheet({
         <View style={styles.headerRow}>
           {step > 1 ? (
             <TouchableOpacity
-              onPress={() => transitionToStep(1)}
+              onPress={() => {
+                setSelectedSlot(null);
+                transitionToStep(1);
+              }}
               hitSlop={12}
               activeOpacity={0.7}
               style={styles.headerSide}
@@ -932,9 +935,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 8,
     borderRadius: 8,
-    backgroundColor: "rgba(0,214,143,0.08)",
+    backgroundColor: colors.nova08,
     borderWidth: 1,
-    borderColor: "rgba(0,214,143,0.15)",
+    borderColor: colors.nova15,
   },
   contextText: {
     fontSize: 13,
@@ -1043,8 +1046,8 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
   },
   serviceCardSel: {
-    borderColor: "rgba(245,243,239,0.25)",
-    backgroundColor: "rgba(245,243,239,0.08)",
+    borderColor: colors.warmWhite25,
+    backgroundColor: colors.warmWhite08,
   },
   serviceCardLeft: { flex: 1, marginRight: 12 },
   serviceName: { fontSize: 15, fontWeight: "500", fontFamily: "Satoshi-Medium", color: LABEL },
@@ -1108,8 +1111,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.obsidian600,
   },
   dateChipSelected: {
-    backgroundColor: "rgba(245,243,239,0.08)",
-    borderColor: "rgba(245,243,239,0.20)",
+    backgroundColor: colors.warmWhite08,
+    borderColor: colors.warmWhite20,
   },
   dateChipDow: { fontSize: 10, fontFamily: "Satoshi-Medium", color: DIM, fontWeight: "500" },
   dateChipDowSel: { color: LABEL, fontWeight: "600" },
@@ -1134,8 +1137,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   slotPillSel: {
-    backgroundColor: "rgba(245,243,239,0.08)",
-    borderColor: "rgba(245,243,239,0.20)",
+    backgroundColor: colors.warmWhite08,
+    borderColor: colors.warmWhite20,
   },
   slotPillText: {
     fontSize: 13,

@@ -102,10 +102,12 @@ export default function BlockDetailSheet({
       .from("availability_overrides")
       .update({ reason: reasonTrim })
       .eq("id", block.id);
-    if (!error) {
-      onActionComplete();
-      onClose();
+    if (error) {
+      Alert.alert("Could not update block", error.message);
+      return;
     }
+    onActionComplete();
+    onClose();
   };
 
   const deleteTemplate = async (templateId: string) => {
@@ -113,10 +115,12 @@ export default function BlockDetailSheet({
       .from("availability_overrides")
       .delete()
       .eq("id", templateId);
-    if (!error) {
-      onActionComplete();
-      onClose();
+    if (error) {
+      Alert.alert("Could not delete block", error.message);
+      return;
     }
+    onActionComplete();
+    onClose();
   };
 
   const handleRemove = () => {
@@ -328,9 +332,9 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 52,
     borderRadius: 12,
-    backgroundColor: "rgba(239,68,68,0.10)",
+    backgroundColor: colors.errorAlt10,
     borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.2)",
+    borderColor: colors.errorAlt20,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,

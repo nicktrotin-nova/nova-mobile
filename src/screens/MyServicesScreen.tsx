@@ -156,16 +156,17 @@ export default function MyServicesScreen() {
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   const toggleOffered = async (bs: BarberService) => {
-    await supabase
+    const { error } = await supabase
       .from("barber_services")
       .update({ is_offered: !bs.is_offered })
       .eq("id", bs.id);
+    if (error) { Alert.alert("Could not update", error.message); return; }
     await load();
   };
 
   const addToMenu = async (serviceId: string) => {
     if (!barberId) return;
-    await supabase.from("barber_services").insert({
+    const { error } = await supabase.from("barber_services").insert({
       barber_id: barberId,
       service_id: serviceId,
       price: 0,
@@ -173,22 +174,25 @@ export default function MyServicesScreen() {
       is_offered: true,
       is_in_next_available_pool: true,
     });
+    if (error) { Alert.alert("Could not add service", error.message); return; }
     await load();
   };
 
   const updatePrice = async (bsId: string, newPriceVal: number) => {
-    await supabase
+    const { error } = await supabase
       .from("barber_services")
       .update({ price: newPriceVal })
       .eq("id", bsId);
+    if (error) { Alert.alert("Could not update price", error.message); return; }
     await load();
   };
 
   const updateDuration = async (bsId: string, dur: number) => {
-    await supabase
+    const { error } = await supabase
       .from("barber_services")
       .update({ duration_minutes: dur })
       .eq("id", bsId);
+    if (error) { Alert.alert("Could not update duration", error.message); return; }
     await load();
   };
 

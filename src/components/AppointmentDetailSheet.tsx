@@ -108,6 +108,7 @@ export default function AppointmentDetailSheet({
   const [localClientName, setLocalClientName] = useState<string | null>(null);
   const [localPrice, setLocalPrice] = useState<number | null>(null);
   const [localNotes, setLocalNotes] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
 
   const nameInputRef = useRef<TextInput>(null);
   const priceInputRef = useRef<TextInput>(null);
@@ -312,28 +313,33 @@ export default function AppointmentDetailSheet({
   const serviceName = appointment.services?.name ?? "Service";
 
   const handleComplete = async () => {
-    if (!paymentMethod || !appointment) return;
+    if (!paymentMethod || !appointment || completing) return;
 
-    const result = await engine.complete({
-      appointmentId: appointment.id,
-      paymentMethod,
-      priceOverride: localPrice ?? undefined,
-    });
+    setCompleting(true);
+    try {
+      const result = await engine.complete({
+        appointmentId: appointment.id,
+        paymentMethod,
+        priceOverride: localPrice ?? undefined,
+      });
 
-    if (!result.success) {
-      Alert.alert("Error", result.message);
-      return;
+      if (!result.success) {
+        Alert.alert("Error", result.message);
+        return;
+      }
+
+      // Card payments via PaymentSheet not yet supported from detail sheet — only MyDayScreen
+      if ("needsPaymentSheet" in result) {
+        Alert.alert("Card payments", "Use the My Day screen to accept card payments");
+        return;
+      }
+
+      Alert.alert("Completed", result.toastMessage);
+      onActionComplete();
+      onClose();
+    } finally {
+      setCompleting(false);
     }
-
-    // Card payments via PaymentSheet not yet supported from detail sheet — only MyDayScreen
-    if ("needsPaymentSheet" in result) {
-      Alert.alert("Card payments", "Use the My Day screen to accept card payments");
-      return;
-    }
-
-    Alert.alert("Completed", result.toastMessage);
-    onActionComplete();
-    onClose();
   };
 
   const handleCancel = () => {
@@ -836,13 +842,20 @@ export default function AppointmentDetailSheet({
                 <TouchableOpacity
                   style={[
                     styles.btnPrimary,
-                    !paymentMethod && styles.btnDisabled,
+                    (!paymentMethod || completing) && styles.btnDisabled,
                   ]}
-                  disabled={!paymentMethod}
+                  disabled={!paymentMethod || completing}
                   onPress={handleComplete}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.btnPrimaryText}>Complete</Text>
+                  {completing ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <ActivityIndicator size="small" color="#F5F3EF" />
+                      <Text style={styles.btnPrimaryText}>Completing...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.btnPrimaryText}>Complete</Text>
+                  )}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setPaymentStep(false)}>
                   <Text style={styles.cancelPayText}>Back</Text>
@@ -970,43 +983,43 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeOnline: {
-    backgroundColor: "rgba(0,214,143,0.1)",
-    borderColor: "rgba(0,214,143,0.2)",
+    backgroundColor: colors.nova10,
+    borderColor: colors.nova20,
   },
   badgeTextOnline: {
     color: NOVA_GREEN,
   },
   badgePhone: {
-    backgroundColor: "rgba(251,191,36,0.1)",
-    borderColor: "rgba(251,191,36,0.2)",
+    backgroundColor: colors.warning10,
+    borderColor: colors.warning20,
   },
   badgeTextPhone: {
     color: colors.warning,
   },
   badgeWalkin: {
-    backgroundColor: "rgba(148,163,184,0.1)",
-    borderColor: "rgba(148,163,184,0.2)",
+    backgroundColor: colors.steel10,
+    borderColor: colors.steelAlt20,
   },
   badgeTextWalkin: {
     color: colors.textPrimary,
   },
   badgeConfirmed: {
-    backgroundColor: "rgba(0,214,143,0.1)",
-    borderColor: "rgba(0,214,143,0.2)",
+    backgroundColor: colors.nova10,
+    borderColor: colors.nova20,
   },
   badgeTextConfirmed: {
     color: NOVA_GREEN,
   },
   badgeNoShow: {
-    backgroundColor: "rgba(248,113,113,0.1)",
-    borderColor: "rgba(248,113,113,0.2)",
+    backgroundColor: colors.error10,
+    borderColor: colors.error20,
   },
   badgeTextNoShow: {
     color: colors.error,
   },
   badgeCompleted: {
-    backgroundColor: "rgba(148,163,184,0.1)",
-    borderColor: "rgba(148,163,184,0.2)",
+    backgroundColor: colors.steel10,
+    borderColor: colors.steelAlt20,
   },
   badgeTextCompleted: {
     color: MUTED,
@@ -1115,9 +1128,9 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 52,
     borderRadius: 12,
-    backgroundColor: "rgba(248,113,113,0.10)",
+    backgroundColor: colors.error10,
     borderWidth: 1,
-    borderColor: "rgba(248,113,113,0.2)",
+    borderColor: colors.error20,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
@@ -1216,8 +1229,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   payPillSelected: {
-    borderColor: "rgba(245,243,239,0.25)",
-    backgroundColor: "rgba(245,243,239,0.10)",
+    borderColor: colors.warmWhite25,
+    backgroundColor: colors.warmWhite10,
   },
   payPillText: {
     fontSize: 13,
@@ -1269,8 +1282,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.obsidian600,
   },
   dateChipSelected: {
-    backgroundColor: "rgba(0,214,143,0.15)",
-    borderColor: "rgba(0,214,143,0.4)",
+    backgroundColor: colors.nova15,
+    borderColor: colors.nova40,
   },
   dateChipDow: {
     fontSize: 10,
@@ -1324,8 +1337,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   slotPillSelected: {
-    backgroundColor: "rgba(0,214,143,0.15)",
-    borderColor: "rgba(0,214,143,0.4)",
+    backgroundColor: colors.nova15,
+    borderColor: colors.nova40,
   },
   slotPillText: {
     fontSize: 13,

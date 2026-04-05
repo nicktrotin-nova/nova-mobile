@@ -198,12 +198,13 @@ export default function MyScheduleScreen() {
             ? existing.end_time
             : DEFAULT_END;
         if (existing?.id) {
-          await supabase
+          const { error } = await supabase
             .from("availability_schedules")
             .update({ is_available: true, start_time: startT, end_time: endT })
             .eq("id", existing.id);
+          if (error) throw error;
         } else {
-          await supabase.from("availability_schedules").insert({
+          const { error } = await supabase.from("availability_schedules").insert({
             barber_id: barberId,
             shop_id: shopId,
             day_of_week: dow,
@@ -211,15 +212,17 @@ export default function MyScheduleScreen() {
             end_time: endT,
             is_available: true,
           });
+          if (error) throw error;
         }
       } else {
         if (existing?.id) {
-          await supabase
+          const { error } = await supabase
             .from("availability_schedules")
             .update({ is_available: false })
             .eq("id", existing.id);
+          if (error) throw error;
         } else {
-          await supabase.from("availability_schedules").insert({
+          const { error } = await supabase.from("availability_schedules").insert({
             barber_id: barberId,
             shop_id: shopId,
             day_of_week: dow,
@@ -227,6 +230,7 @@ export default function MyScheduleScreen() {
             end_time: DEFAULT_END,
             is_available: false,
           });
+          if (error) throw error;
         }
         if (expandedDow === dow) setExpandedDow(null);
       }

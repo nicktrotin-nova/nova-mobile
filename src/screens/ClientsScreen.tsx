@@ -170,6 +170,7 @@ export default function ClientsScreen() {
   const [selected, setSelected] = useState<ClientListItem | null>(null);
   const [recentAppts, setRecentAppts] = useState<ApptRowRaw[]>([]);
   const [apptsLoading, setApptsLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -180,9 +181,10 @@ export default function ClientsScreen() {
 
   const load = useCallback(async () => {
     if (!barberId) return;
+    setFetchError(false);
 
     // Query 1 — client relationships
-    const { data: rels } = await supabase
+    const { data: rels, error: relsError } = await supabase
       .from("client_barber_relationships")
       .select(`
         visit_count,
@@ -193,6 +195,11 @@ export default function ClientsScreen() {
       `)
       .eq("barber_id", barberId)
       .eq("is_active", true);
+
+    if (relsError) {
+      setFetchError(true);
+      return;
+    }
 
     if (!rels || rels.length === 0) {
       setItems([]);
@@ -222,12 +229,17 @@ export default function ClientsScreen() {
     const clientIds = Array.from(clientMap.keys());
 
     // Query 2 — revenue + last visit (completed appointments only)
-    const { data: apptData } = await supabase
+    const { data: apptData, error: apptError } = await supabase
       .from("appointments")
       .select("client_id, price_charged, appointment_date, status")
       .eq("barber_id", barberId)
       .eq("status", "completed")
       .in("client_id", clientIds);
+
+    if (apptError) {
+      setFetchError(true);
+      return;
+    }
 
     if (apptData) {
       for (const a of apptData as ApptAggRow[]) {
@@ -333,6 +345,14 @@ export default function ClientsScreen() {
 
       {loading ? (
         <LoadingScreen />
+      ) : items.length === 0 && fetchError ? (
+        <View style={styles.emptyWrap}>
+          <View pointerEvents="none">
+            <Users size={48} color={DIM} strokeWidth={1.8} />
+          </View>
+          <Text style={styles.emptyTitle}>Couldn't load clients</Text>
+          <Text style={styles.emptySub}>Check your connection and pull to refresh.</Text>
+        </View>
       ) : items.length === 0 ? (
         <EmptyState
           icon={<Users size={48} color={DIM} strokeWidth={1.8} />}
@@ -463,7 +483,7 @@ export default function ClientsScreen() {
                       </Text>
                     </View>
                     <View pointerEvents="none" style={styles.chevronWrap}>
-                      <ChevronRight size={16} color="rgba(255,255,255,0.15)" strokeWidth={2} />
+                      <ChevronRight size={16} color={colors.white15} strokeWidth={2} />
                     </View>
                   </TouchableOpacity>
                 );
@@ -741,8 +761,8 @@ const styles = StyleSheet.create({
   // Sort pills
   pillRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
   pill: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
-  pillActive: { backgroundColor: "rgba(245,243,239,0.15)" },
-  pillInactive: { backgroundColor: "rgba(255,255,255,0.06)" },
+  pillActive: { backgroundColor: colors.warmWhite15 },
+  pillInactive: { backgroundColor: colors.white06 },
   pillText: { fontSize: 13, fontWeight: "500", fontFamily: "Satoshi-Medium" },
   pillTextActive: { color: "#FFFFFF" },
   pillTextInactive: { color: MUTED },
@@ -771,21 +791,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  initialsReg: { backgroundColor: "rgba(148,163,184,0.12)" },
-  initialsPref: { backgroundColor: "rgba(0,214,143,0.12)" },
+  initialsReg: { backgroundColor: colors.steel12 },
+  initialsPref: { backgroundColor: colors.nova12 },
   initialsText: { fontSize: 15, fontWeight: "600", fontFamily: "Satoshi-Medium" },
   clientMid: { flex: 1, marginLeft: 14, minWidth: 0 },
   clientName: { fontSize: 15, fontWeight: "500", fontFamily: "Satoshi-Medium", color: LABEL },
   starChar: { fontSize: 12, color: NOVA_GREEN },
   clientContact: { fontSize: 12, fontFamily: "Satoshi-Regular", color: DIM, marginTop: 2 },
-  clientNoPhone: { color: "rgba(255,255,255,0.2)" },
+  clientNoPhone: { color: colors.white25 },
   chevronWrap: { marginLeft: 8 },
 
   // Modal
   modalOverlay: { flex: 1, justifyContent: "flex-end" },
   modalScrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: colors.black60,
   },
   modalSheet: {
     backgroundColor: colors.obsidian700,
@@ -799,7 +819,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.25)",
+    backgroundColor: colors.white25,
     marginTop: 12,
     marginBottom: 16,
   },
@@ -867,7 +887,7 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.04)",
+    borderBottomColor: colors.white04,
   },
   apptLeft: { flex: 1, minWidth: 0 },
   apptDate: { fontSize: 13, fontFamily: "Satoshi-Regular", color: LABEL },

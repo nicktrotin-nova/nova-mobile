@@ -98,6 +98,7 @@ export default function OwnerGlanceScreen() {
   const [pendingInvites, setPendingInvites] = useState(0);
   const [selectedBarber, setSelectedBarber] = useState<BarberCardData | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
 
   // Snapshot time values — stable for this render pass
   const now = toZonedTime(new Date(), TZ);
@@ -109,6 +110,7 @@ export default function OwnerGlanceScreen() {
 
   const fetchData = useCallback(async () => {
     if (!shopId) return;
+    setFetchError(false);
 
     try {
       // 1. All barbers in the shop
@@ -286,7 +288,7 @@ export default function OwnerGlanceScreen() {
       setTotalWeek(weekTotal);
       setPendingInvites(inviteCount ?? 0);
     } catch {
-      // Screen remains in whatever state it was
+      setFetchError(true);
     }
   }, [shopId]);
 
@@ -302,6 +304,15 @@ export default function OwnerGlanceScreen() {
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={NOVA_GREEN} size="large" />
+        </View>
+      ) : fetchError ? (
+        <View style={styles.loadingWrap}>
+          <Text style={{ color: "#F5F3EF", fontSize: 15, fontFamily: "Satoshi-Medium", textAlign: "center", marginBottom: 12 }}>
+            Couldn't load floor data
+          </Text>
+          <TouchableOpacity onPress={onRefresh} style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: "#24272E", borderRadius: 8 }}>
+            <Text style={{ color: "#00D68F", fontSize: 14, fontFamily: "Satoshi-Medium" }}>Try again</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <ScrollView
