@@ -48,7 +48,6 @@ import {
   DATE_STRIP_LEN,
   DATE_PAST_DAYS,
   TEAM_ITEM_APPROX_WIDTH,
-  DATE_CHIP_APPROX_WIDTH,
   GUTTER_W,
   ZOOM_KEY,
   SLOT_KEY,
@@ -74,7 +73,7 @@ export default function CalendarScreen() {
 
   const [zoomLevel, setZoomLevel] = useState(190);
   const [slotSize, setSlotSize] = useState(15);
-  const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
+  const [selectedBarberId, setSelectedBarberId] = useState<string | null>(barberId);
   const initialToday = useMemo(
     () => format(toZonedTime(new Date(), TZ), "yyyy-MM-dd"),
     [],
@@ -167,11 +166,13 @@ export default function CalendarScreen() {
     }, []),
   );
 
+  // Default to logged-in barber once barbers load — fall back to first barber if auth barberId isn't in the shop list
   useEffect(() => {
-    if (barberId && !selectedBarberId) {
-      setSelectedBarberId(barberId);
-    }
-  }, [barberId, selectedBarberId]);
+    if (barbers.length === 0) return;
+    if (selectedBarberId && barbers.some((b) => b.id === selectedBarberId)) return;
+    const match = barbers.find((b) => b.id === barberId);
+    setSelectedBarberId(match ? match.id : barbers[0].id);
+  }, [barbers, barberId]);
 
   // "Book again" prefill from ClientsScreen
   useEffect(() => {
@@ -319,21 +320,7 @@ export default function CalendarScreen() {
     }, 100);
   }, [barbers, barberId]);
 
-  const dateCenteredRef = useRef(false);
-  useEffect(() => {
-    if (dateCenteredRef.current) return;
-    const { width } = Dimensions.get("window");
-    const x = Math.max(
-      0,
-      DATE_PAST_DAYS * DATE_CHIP_APPROX_WIDTH -
-        width / 2 +
-        DATE_CHIP_APPROX_WIDTH / 2,
-    );
-    setTimeout(() => {
-      dateScrollRef.current?.scrollTo({ x, animated: false });
-      dateCenteredRef.current = true;
-    }, 100);
-  }, []);
+  // Today is index 0 (left edge) — no scroll needed on mount
 
   if (!shopId || !barberId) {
     return (
