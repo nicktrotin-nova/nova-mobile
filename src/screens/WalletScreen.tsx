@@ -1,347 +1,757 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
+  TouchableOpacity,
+  Animated,
+  Easing,
+  Share,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
+import { format, parseISO, startOfWeek, subWeeks } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import {
+  Scissors,
+  Share2,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  CircleCheck,
+} from "lucide-react-native";
+import * as Haptics from "expo-haptics";
+import ViewShot, { captureRef } from "react-native-view-shot";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
-import { format, startOfWeek, endOfWeek } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
-import { DollarSign, TrendingUp, Scissors } from "lucide-react-native";
+import HoloShimmer from "../components/HoloShimmer";
+import LoadingScreen from "../components/LoadingScreen";
+import AppointmentCard from "../components/AppointmentCard";
+import {
+  colors,
+  BG,
+  NOVA_GREEN,
+  LABEL,
+  MUTED,
+  DIM,
+  CARD_BG,
+} from "../theme/colors";
+import { SHOP_TZ as TZ } from "../config/shop";
+import { useRealtimeSync } from "../hooks/useRealtimeSync";
+import { useScreenData } from "../hooks/useScreenData";
 
-const DEFAULT_TZ = "Australia/Brisbane";
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface CycleLedger {
+  id: string;
+  period_start: string;
+  period_end: string;
+  rent_due: number | null;
+  collected_digital: number | null;
+  collected_cash_reported: number | null;
+  status: string;
+}
 
 interface CompletedAppointment {
   id: string;
   client_name: string | null;
   price_charged: number | null;
   payment_method: string | null;
+  rent_contribution: number | null;
   appointment_date: string;
   start_time: string;
-  services: { name: string } | null;
+  services: { name: string } | { name: string }[] | null;
 }
 
-interface RentLedger {
-  id: string;
-  period_start: string;
-  period_end: string;
-  rent_due: number;
-  collected_digital: number;
-  collected_cash_reported: number;
-  balance_remaining: number | null;
-  status: string;
+interface ActiveLease {
+  rent_amount: number | null;
 }
+
+// ─── Greeting (relative to barber's own history) ─────────────────────────────
+
+function getHeroGreeting(
+  percentage: number,
+  takeHome: number,
+  lastWeekTotal: number,
+  firstName: string | null,
+): string {
+  const name = firstName ? `, ${firstName}` : "";
+
+  // If we have last week data, use relative thresholds
+  if (lastWeekTotal > 0) {
+    const ratio = takeHome / lastWeekTotal;
+    if (percentage === 0) return `Fresh week${name}. Let's build.`;
+    if (ratio >= 1.2) return `Ahead of last week${name}. Keep pushing.`;
+    if (ratio >= 0.8) return `Tracking well${name}. Solid pace.`;
+    if (percentage < 50) return `Building momentum${name}.`;
+    if (percentage < 100) return `Getting close${name}.`;
+    return `Rent covered${name}. It's all yours now.`;
+  }
+
+  // Fallback without history
+  if (percentage === 0) return `Let's get started${name}.`;
+  if (percentage < 50) return `Building momentum${name}.`;
+  if (percentage < 100) return `Getting close${name}.`;
+  if (takeHome < 200) return `Rent covered${name}. Keep going.`;
+  if (takeHome < 500) return `Solid week${name}.`;
+  return `You're killing it${name}.`;
+}
+
+// ─── Vibe words (barber-specific for share) ──────────────────────────────────
+
+function getVibeWord(
+  appointmentCount: number,
+  collected: number,
+): string {
+  if (appointmentCount >= 30) return "Full books.";
+  if (appointmentCount >= 20) return "Chair's been warm.";
+  if (appointmentCount >= 10) return `${appointmentCount} cuts deep.`;
+  if (collected > 1500) return "Friday stack.";
+  if (collected > 800) return "Building.";
+  if (collected > 0) return "Clipping.";
+  return "New week.";
+}
+
+function formatCurrencySmart(value: number): string {
+  return value % 1 === 0 ? `$${value.toFixed(0)}` : `$${value.toFixed(2)}`;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function WalletScreen() {
-  const { barberId, shopId } = useAuth();
+  const { barberId } = useAuth();
+
+  const [ledger, setLedger] = useState<CycleLedger | null>(null);
   const [appointments, setAppointments] = useState<CompletedAppointment[]>([]);
-  const [rentLedger, setRentLedger] = useState<RentLedger | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [activeLease, setActiveLease] = useState<ActiveLease | null>(null);
+  const [barberFirstName, setBarberFirstName] = useState<string | null>(null);
+  const [lastWeekTotal, setLastWeekTotal] = useState(0);
+  const [isSharing, setIsSharing] = useState(false);
+  const heroRef = useRef<ViewShot>(null);
+  const [heroCardWidth, setHeroCardWidth] = useState(0);
+  const [heroCardHeight, setHeroCardHeight] = useState(0);
 
-  const shopNow = toZonedTime(new Date(), DEFAULT_TZ);
-  const weekStart = format(startOfWeek(shopNow, { weekStartsOn: 1 }), "yyyy-MM-dd");
-  const weekEnd = format(endOfWeek(shopNow, { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const countUpAnim = useRef(new Animated.Value(0)).current;
+  const [displayedAmount, setDisplayedAmount] = useState(0);
 
+  // ── Data fetching ──
   const fetchData = useCallback(async () => {
     if (!barberId) return;
 
-    // Fetch completed appointments this week
-    const { data: aptData } = await supabase
-      .from("appointments")
-      .select(`
-        id, client_name, price_charged, payment_method,
-        appointment_date, start_time,
-        services!appointments_service_id_fkey(name)
-      `)
-      .eq("barber_id", barberId)
-      .eq("status", "completed")
-      .gte("appointment_date", weekStart)
-      .lte("appointment_date", weekEnd)
-      .order("appointment_date", { ascending: false })
-      .order("start_time", { ascending: false });
+    const now = toZonedTime(new Date(), TZ);
+    const weekStart = format(
+      startOfWeek(now, { weekStartsOn: 1 }),
+      "yyyy-MM-dd",
+    );
+    const today = format(now, "yyyy-MM-dd");
+    const lastWeekStart = format(
+      startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }),
+      "yyyy-MM-dd",
+    );
+    const lastWeekEnd = format(
+      subWeeks(startOfWeek(now, { weekStartsOn: 1 }), 0),
+      "yyyy-MM-dd",
+    );
 
-    if (aptData) setAppointments(aptData as any);
+    const [ledgerRes, apptRes, leaseRes, barberRes, lastWeekRes] =
+      await Promise.all([
+        supabase
+          .from("barber_rent_ledger")
+          .select(
+            "id, period_start, period_end, rent_due, collected_digital, collected_cash_reported, status",
+          )
+          .eq("barber_id", barberId)
+          .eq("status", "open")
+          .order("period_start", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("appointments")
+          .select(
+            `id, client_name, price_charged, payment_method,
+           rent_contribution, appointment_date, start_time,
+           services!appointments_service_id_fkey(name)`,
+          )
+          .eq("barber_id", barberId)
+          .eq("status", "completed")
+          .gte("appointment_date", weekStart)
+          .lte("appointment_date", today)
+          .order("appointment_date", { ascending: false })
+          .order("start_time", { ascending: false }),
+        supabase
+          .from("booth_leases")
+          .select("rent_amount")
+          .eq("barber_id", barberId)
+          .eq("status", "active")
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("barbers")
+          .select("name")
+          .eq("id", barberId)
+          .limit(1)
+          .maybeSingle(),
+        // Last week's completed appointments for delta
+        supabase
+          .from("appointments")
+          .select("price_charged")
+          .eq("barber_id", barberId)
+          .eq("status", "completed")
+          .gte("appointment_date", lastWeekStart)
+          .lt("appointment_date", lastWeekEnd),
+      ]);
 
-    // Fetch current rent ledger
-    const { data: ledgerData } = await supabase
-      .from("rent_ledger")
-      .select("*")
-      .eq("barber_id", barberId)
-      .lte("period_start", weekEnd)
-      .gte("period_end", weekStart)
-      .order("period_start", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    setLedger((ledgerRes.data ?? null) as CycleLedger | null);
+    setAppointments((apptRes.data ?? []) as CompletedAppointment[]);
+    setActiveLease((leaseRes.data ?? null) as ActiveLease | null);
 
-    if (ledgerData) setRentLedger(ledgerData as any);
+    // Extract first name
+    const fullName = (barberRes.data as any)?.name ?? null;
+    if (fullName) {
+      setBarberFirstName(fullName.split(" ")[0] ?? null);
+    }
 
-    setLoading(false);
-  }, [barberId, weekStart, weekEnd]);
+    // Sum last week
+    const lwTotal = ((lastWeekRes.data as any[]) ?? []).reduce(
+      (sum: number, a: any) => sum + Number(a.price_charged ?? 0),
+      0,
+    );
+    setLastWeekTotal(lwTotal);
+  }, [barberId]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { loading, refreshing, onRefresh, refetch } = useScreenData(
+    fetchData,
+    [fetchData],
+    !!barberId,
+  );
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchData();
-    setRefreshing(false);
-  }, [fetchData]);
+  const walletTables = useMemo(
+    () => [
+      { table: "appointments", filter: `barber_id=eq.${barberId}` },
+      {
+        table: "barber_rent_ledger",
+        event: "UPDATE" as const,
+        filter: `barber_id=eq.${barberId}`,
+      },
+    ],
+    [barberId],
+  );
+  useRealtimeSync({
+    channelName: "wallet",
+    key: barberId,
+    tables: walletTables,
+    onSync: refetch,
+  });
 
-  const totalEarned = useMemo(() => {
-    return appointments.reduce((sum, a) => sum + (a.price_charged ?? 0), 0);
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  );
+
+  // ── Computed ──
+  const collected = useMemo(
+    () =>
+      appointments.reduce(
+        (sum, a) => sum + Number(a.price_charged ?? 0),
+        0,
+      ),
+    [appointments],
+  );
+  const rentDue = Number(activeLease?.rent_amount ?? ledger?.rent_due ?? 0);
+  const takeHome = Math.max(0, collected - rentDue);
+  const rentPct = rentDue > 0 ? Math.min(1, collected / rentDue) : 0;
+  const percentage = Math.round(rentPct * 100);
+  const rentRemaining = Math.max(0, rentDue - collected);
+  const rentCovered = rentRemaining <= 0 && rentDue > 0;
+  const hasRent = rentDue > 0;
+
+  // Week-over-week delta
+  const lastWeekTakeHome = Math.max(0, lastWeekTotal - rentDue);
+  const delta = takeHome - lastWeekTakeHome;
+  const deltaAbs = Math.abs(delta);
+  const hasDelta = lastWeekTotal > 0 && collected > 0;
+
+  const heroGreeting = getHeroGreeting(
+    percentage,
+    takeHome,
+    lastWeekTotal,
+    barberFirstName,
+  );
+
+  // Unique clients for jewel count
+  const newClientCount = useMemo(() => {
+    const names = new Set<string>();
+    for (const a of appointments) {
+      const n = a.client_name?.trim().toLowerCase();
+      if (n) names.add(n);
+    }
+    return names.size;
   }, [appointments]);
 
-  const rentDue = rentLedger?.rent_due ?? 0;
-  const rentCollected = rentLedger
-    ? (rentLedger.collected_digital ?? 0) + (rentLedger.collected_cash_reported ?? 0)
-    : 0;
-  const rentRemaining = Math.max(0, rentDue - rentCollected);
-  const takeHome = Math.max(0, totalEarned - rentRemaining);
-  const rentProgress = rentDue > 0 ? Math.min(1, rentCollected / rentDue) : 0;
+  // ── Animations ──
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: rentPct,
+      duration: 800,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [rentPct, progressAnim]);
 
-  const cardCount = appointments.filter((a) => a.payment_method === "card").length;
-  const cashCount = appointments.filter((a) => a.payment_method === "cash").length;
+  useEffect(() => {
+    countUpAnim.setValue(0);
+    setDisplayedAmount(0);
+    const listener = countUpAnim.addListener(({ value }) => {
+      setDisplayedAmount(Math.round(value * 100) / 100);
+    });
+    Animated.timing(countUpAnim, {
+      toValue: takeHome,
+      duration: 1200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+    return () => countUpAnim.removeListener(listener);
+  }, [takeHome, countUpAnim]);
 
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"],
+  });
+
+  // ── Share ──
+  const handleShare = useCallback(async () => {
+    if (!heroRef.current) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsSharing(true);
+    await new Promise((r) => setTimeout(r, 100));
+    try {
+      const uri = await captureRef(heroRef, {
+        format: "png",
+        quality: 1,
+        result: "tmpfile",
+      });
+      await Share.share({
+        url: uri,
+        message: "This week's grind on Nova.",
+      });
+    } catch {
+      // User dismissed or capture failed
+    } finally {
+      setIsSharing(false);
+    }
+  }, []);
+
+  // ── Loading ──
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator color="#00D68F" size="large" />
-      </View>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <LoadingScreen />
+      </SafeAreaView>
     );
   }
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00D68F" />
-      }
-    >
-      {/* Take-home hero */}
-      <View style={styles.heroCard}>
-        <Text style={styles.heroLabel}>Take-home this week</Text>
-        <Text style={styles.heroAmount}>
-          ${takeHome.toFixed(2)}
-        </Text>
-        <Text style={styles.heroSubtext}>
-          {appointments.length} cut{appointments.length !== 1 ? "s" : ""} · ${totalEarned.toFixed(2)} earned
+  // ── Delta indicator ──
+  const renderDelta = () => {
+    if (!hasDelta) return null;
+    const isUp = delta > 0;
+    const isFlat = deltaAbs < 10;
+    const DeltaIcon = isFlat ? Minus : isUp ? TrendingUp : TrendingDown;
+    const deltaColor = isFlat ? MUTED : isUp ? NOVA_GREEN : colors.error;
+
+    return (
+      <View style={styles.deltaRow}>
+        <View pointerEvents="none">
+          <DeltaIcon size={12} color={deltaColor} strokeWidth={2.5} />
+        </View>
+        <Text style={[styles.deltaText, { color: deltaColor }]}>
+          {isFlat
+            ? "Same as last week"
+            : `${formatCurrencySmart(deltaAbs)} ${isUp ? "more" : "less"} than last week`}
         </Text>
       </View>
+    );
+  };
 
-      {/* Rent progress */}
-      {rentDue > 0 && (
-        <View style={styles.rentCard}>
-          <View style={styles.rentHeader}>
-            <Text style={styles.rentLabel}>Rent progress</Text>
-            <Text style={styles.rentAmount}>
-              ${rentCollected.toFixed(0)} / ${rentDue.toFixed(0)}
+  return (
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={NOVA_GREEN}
+          />
+        }
+      >
+        <ViewShot ref={heroRef} options={{ format: "png", quality: 1 }}>
+          <View
+            style={[styles.heroCard, rentCovered && styles.heroCardGlow]}
+            onLayout={(e) => {
+              setHeroCardWidth(e.nativeEvent.layout.width);
+              setHeroCardHeight(e.nativeEvent.layout.height);
+            }}
+          >
+            {/* Holographic shimmer */}
+            {heroCardWidth > 0 && (
+              <HoloShimmer width={heroCardWidth} height={heroCardHeight} />
+            )}
+
+            {/* Greeting — inside card, part of the emotional unit */}
+            {!isSharing && (
+              <Text style={styles.heroGreeting}>{heroGreeting}</Text>
+            )}
+
+            <Text style={styles.heroLabel}>
+              {isSharing ? "THIS WEEK'S GRIND" : "yours this week"}
             </Text>
+
+            {/* Hero amount */}
+            {isSharing ? (
+              <Text style={styles.heroAmountHidden}>
+                {getVibeWord(appointments.length, collected)}
+              </Text>
+            ) : (
+              <Text style={styles.heroAmount}>
+                {formatCurrencySmart(displayedAmount)}
+              </Text>
+            )}
+
+            {/* Week-over-week delta */}
+            {!isSharing && renderDelta()}
+
+            {/* Gross / Rent breakdown */}
+            {!isSharing && (
+              <View style={styles.grRow}>
+                <View style={styles.grCol}>
+                  <Text style={styles.grLabel}>Gross</Text>
+                  <Text style={styles.grValueGreen}>
+                    {formatCurrencySmart(collected)}
+                  </Text>
+                </View>
+                <Text style={styles.grDot}>·</Text>
+                <View style={styles.grCol}>
+                  <Text style={styles.grLabel}>Rent</Text>
+                  <Text style={styles.grValueMuted}>
+                    {formatCurrencySmart(rentDue)}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Progress bar */}
+            {hasRent ? (
+              <>
+                <View style={styles.progressWrap}>
+                  <View style={styles.progressTrack}>
+                    <Animated.View
+                      style={[styles.progressFill, { width: progressWidth }]}
+                    />
+                  </View>
+                </View>
+                {!isSharing &&
+                  (rentCovered ? (
+                    <View style={styles.rentCoveredRow}>
+                      <View pointerEvents="none">
+                        <CircleCheck
+                          size={13}
+                          color={NOVA_GREEN}
+                          strokeWidth={2.5}
+                        />
+                      </View>
+                      <Text style={styles.rentCoveredText}>Rent covered</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.rentRemainingText}>
+                      {formatCurrencySmart(rentRemaining)} left
+                    </Text>
+                  ))}
+              </>
+            ) : null}
+
+            {/* Share pill — prominent, below progress */}
+            {!isSharing && (
+              <TouchableOpacity
+                style={styles.sharePill}
+                activeOpacity={0.8}
+                delayPressIn={0}
+                onPress={() => void handleShare()}
+              >
+                <View pointerEvents="none">
+                  <Share2 size={14} color={MUTED} strokeWidth={2.2} />
+                </View>
+                <Text style={styles.sharePillText}>Share your stack</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Nova branding — only during capture */}
+            {isSharing && <Text style={styles.shareBranding}>Nova</Text>}
           </View>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${rentProgress * 100}%`,
-                  backgroundColor:
-                    rentProgress >= 0.7 ? "#00D68F" : rentProgress >= 0.4 ? "#F59E0B" : "#EF4444",
-                },
-              ]}
-            />
-          </View>
-          {rentRemaining > 0 ? (
-            <Text style={styles.rentSubtext}>
-              ${rentRemaining.toFixed(0)} remaining until rent is covered
-            </Text>
+        </ViewShot>
+
+        {/* ── Appointments ── */}
+        <View style={styles.sectionWrap}>
+          <Text style={styles.sectionHeader}>This week</Text>
+          {appointments.length === 0 ? (
+            <View style={styles.emptyCycleWrap}>
+              <View pointerEvents="none">
+                <Scissors size={32} color={NOVA_GREEN} />
+              </View>
+              <Text style={styles.emptyCycleText}>
+                Complete your first cut and watch the pile grow.
+              </Text>
+            </View>
           ) : (
-            <Text style={[styles.rentSubtext, { color: "#00D68F" }]}>
-              Rent covered — everything from here is yours
-            </Text>
+            appointments.map((apt) => (
+              <AppointmentCard
+                key={apt.id}
+                appointment={apt}
+                variant="transaction"
+                meta={format(parseISO(apt.appointment_date), "EEE")}
+                dimCompleted={false}
+              />
+            ))
           )}
         </View>
-      )}
 
-      {/* Payment breakdown */}
-      <View style={styles.breakdownCard}>
-        <Text style={styles.sectionTitle}>Payment breakdown</Text>
-        <View style={styles.breakdownRow}>
-          <Text style={styles.breakdownLabel}>Card</Text>
-          <Text style={styles.breakdownValue}>{cardCount} payments</Text>
-        </View>
-        <View style={styles.breakdownRow}>
-          <Text style={styles.breakdownLabel}>Cash</Text>
-          <Text style={styles.breakdownValue}>{cashCount} payments</Text>
-        </View>
-      </View>
-
-      {/* Recent completions */}
-      <View style={styles.recentSection}>
-        <Text style={styles.sectionTitle}>This week</Text>
-        {appointments.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Scissors color="#7BA7C2" size={24} />
-            <Text style={styles.emptyText}>No completed cuts this week</Text>
+        {/* Summary footer */}
+        {appointments.length > 0 && (
+          <View style={styles.summaryFooter}>
+            <Text style={styles.summaryText}>
+              {appointments.length} cut{appointments.length === 1 ? "" : "s"} ·{" "}
+              {newClientCount} client{newClientCount === 1 ? "" : "s"}
+            </Text>
           </View>
-        ) : (
-          appointments.map((apt) => (
-            <View key={apt.id} style={styles.recentRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.recentClient}>{apt.client_name || "Walk-in"}</Text>
-                <Text style={styles.recentService}>{(apt.services as any)?.name || "Service"}</Text>
-              </View>
-              <Text style={styles.recentPrice}>${apt.price_charged ?? 0}</Text>
-            </View>
-          ))
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0F1923",
+  safe: { flex: 1, backgroundColor: BG },
+  scroll: { flex: 1, backgroundColor: BG },
+  scrollContent: { paddingBottom: 110 },
+
+  // ── Hero ──
+  heroCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 24,
+    paddingVertical: 28,
+    paddingHorizontal: 28,
+    backgroundColor: colors.obsidian800,
+    borderWidth: 1,
+    borderColor: colors.borderMedium,
+    overflow: "hidden",
+    position: "relative",
   },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 100,
+  heroCardGlow: {
+    shadowColor: NOVA_GREEN,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 8,
   },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: "#0F1923",
+
+  heroGreeting: {
+    fontSize: 15,
+    fontWeight: "500",
+    fontFamily: "Satoshi-Medium",
+    color: LABEL,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  heroLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    fontFamily: "Satoshi-Medium",
+    color: MUTED,
+    textAlign: "center",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  heroAmount: {
+    marginVertical: 8,
+    fontSize: 56,
+    lineHeight: 64,
+    color: NOVA_GREEN,
+    textAlign: "center",
+    fontFamily: "DMSerifText-Regular",
+  },
+  heroAmountHidden: {
+    marginVertical: 12,
+    fontSize: 32,
+    lineHeight: 40,
+    color: NOVA_GREEN,
+    textAlign: "center",
+    fontFamily: "DMSerifText-Regular",
+    letterSpacing: 1,
+  },
+
+  // ── Delta ──
+  deltaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginBottom: 8,
+  },
+  deltaText: {
+    fontSize: 12,
+    fontFamily: "Satoshi-Regular",
+    color: MUTED,
+  },
+
+  // ── Breakdown ──
+  grRow: {
+    marginTop: 4,
+    flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },
-  heroCard: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 16,
-    padding: 24,
-    alignItems: "center",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
+  grCol: { alignItems: "center", minWidth: 90 },
+  grLabel: { fontSize: 11, fontFamily: "Satoshi-Regular", color: MUTED },
+  grValueGreen: {
+    marginTop: 2,
+    fontSize: 16,
+    fontWeight: "500",
+    fontFamily: "Satoshi-Medium",
+    color: LABEL,
   },
-  heroLabel: {
-    fontSize: 13,
-    color: "#7BA7C2",
-    marginBottom: 8,
+  grValueMuted: {
+    marginTop: 2,
+    fontSize: 16,
+    fontWeight: "500",
+    fontFamily: "Satoshi-Medium",
+    color: MUTED,
   },
-  heroAmount: {
-    fontSize: 42,
-    fontWeight: "700",
-    color: "#00D68F",
+  grDot: {
+    fontSize: 11,
+    color: colors.textGhost,
+    marginHorizontal: 8,
   },
-  heroSubtext: {
-    fontSize: 13,
-    color: "#94A3B8",
-    marginTop: 8,
-  },
-  rentCard: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-  },
-  rentHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  rentLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#F8FAFC",
-  },
-  rentAmount: {
-    fontSize: 13,
-    color: "#94A3B8",
-  },
+
+  // ── Progress ──
+  progressWrap: { marginTop: 20, paddingHorizontal: 0 },
   progressTrack: {
-    height: 6,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 3,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.obsidian600,
     overflow: "hidden",
-    marginBottom: 8,
   },
   progressFill: {
-    height: 6,
-    borderRadius: 3,
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: NOVA_GREEN,
   },
-  rentSubtext: {
-    fontSize: 12,
-    color: "#94A3B8",
-  },
-  breakdownCard: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#F8FAFC",
-    marginBottom: 12,
-  },
-  breakdownRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 6,
-  },
-  breakdownLabel: {
-    fontSize: 13,
-    color: "#94A3B8",
-  },
-  breakdownValue: {
-    fontSize: 13,
-    color: "#F8FAFC",
-  },
-  recentSection: {
-    marginTop: 4,
-  },
-  recentRow: {
+  rentCoveredRow: {
+    marginTop: 8,
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    justifyContent: "center",
+    gap: 5,
   },
-  recentClient: {
-    fontSize: 14,
+  rentCoveredText: {
+    fontSize: 13,
+    fontWeight: "600",
+    fontFamily: "Satoshi-Medium",
+    color: NOVA_GREEN,
+  },
+  rentRemainingText: {
+    marginTop: 8,
+    textAlign: "center",
+    fontSize: 13,
     fontWeight: "500",
-    color: "#F8FAFC",
+    fontFamily: "Satoshi-Medium",
+    color: MUTED,
   },
-  recentService: {
-    fontSize: 12,
-    color: "#7BA7C2",
-    marginTop: 2,
-  },
-  recentPrice: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#00D68F",
-  },
-  emptyState: {
+
+  // ── Share pill ──
+  sharePill: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingTop: 40,
-    gap: 8,
+    justifyContent: "center",
+    alignSelf: "center",
+    gap: 6,
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.borderMedium,
+    backgroundColor: "rgba(245,243,239,0.04)",
   },
-  emptyText: {
+  sharePillText: {
     fontSize: 13,
-    color: "#7BA7C2",
+    fontWeight: "500",
+    fontFamily: "Satoshi-Medium",
+    color: MUTED,
+  },
+  shareBranding: {
+    marginTop: 16,
+    fontSize: 16,
+    fontFamily: "DMSerifText-Regular",
+    color: NOVA_GREEN,
+    textAlign: "center",
+    letterSpacing: 1,
+    opacity: 0.7,
+  },
+
+  // ── Appointments ──
+  sectionWrap: {
+    marginTop: 28,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: CARD_BG,
+  },
+  sectionHeader: {
+    fontSize: 13,
+    fontWeight: "500",
+    fontFamily: "Satoshi-Medium",
+    color: DIM,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  emptyCycleWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 30,
+    paddingTop: 24,
+    paddingBottom: 16,
+  },
+  emptyCycleText: {
+    marginTop: 10,
+    textAlign: "center",
+    fontSize: 14,
+    fontFamily: "Satoshi-Regular",
+    color: DIM,
+  },
+
+  // ── Summary ──
+  summaryFooter: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  summaryText: {
+    fontSize: 12,
+    fontFamily: "Satoshi-Regular",
+    color: DIM,
   },
 });

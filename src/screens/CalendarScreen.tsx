@@ -10,7 +10,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Image,
   Dimensions,
   StyleSheet,
   ActivityIndicator,
@@ -37,6 +36,7 @@ import BlockDetailSheet from "../components/BlockDetailSheet";
 import CreateBookingSheet from "../components/CreateBookingSheet";
 import BlockCreationSheet from "../components/BlockCreationSheet";
 import { colors } from "../theme/colors";
+import TeamStrip from "../components/calendar/TeamStrip";
 import {
   timeToMinutes,
   formatTime12,
@@ -138,6 +138,7 @@ export default function CalendarScreen() {
   const teamScrollRef = useRef<ScrollView>(null);
   const dateScrollRef = useRef<ScrollView>(null);
   const gridScrollRef = useRef<ScrollView>(null);
+  const paperColumnRef = useRef<View>(null);
 
   const [zoomLevel, setZoomLevel] = useState(190);
   const [slotSize, setSlotSize] = useState(15);
@@ -153,6 +154,8 @@ export default function CalendarScreen() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [appointmentCountsByDate, setAppointmentCountsByDate] = useState<Record<string, number>>({});
   const [mergedOverrides, setMergedOverrides] = useState<Override[]>([]);
+  const apptCacheRef = useRef<Record<string, Appointment[]>>({});
+  const fetchSeqRef = useRef(0);
 
   const [loading, setLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] =
@@ -261,6 +264,7 @@ export default function CalendarScreen() {
     }
 
     try {
+    const seq = ++fetchSeqRef.current;
     const { start: rangeStart, end: rangeEnd } = stripRange;
     const needsFullLoad = !barbersLoadedRef.current || lastBarberIdRef.current !== selectedBarberId;
 
@@ -308,21 +312,40 @@ export default function CalendarScreen() {
         counts[d] = (counts[d] ?? 0) + 1;
       }
 
+      if (seq !== fetchSeqRef.current) return; // stale response — discard
       setBarbers(list);
       setAppointmentsDay(appts);
       setSchedules((schedRes.data ?? []) as Schedule[]);
       setMergedOverrides([...existingNonRecurring, ...virtuals]);
       setAppointmentCountsByDate(counts);
+      apptCacheRef.current = { [selectedDateStr]: appts }; // seed cache
       Animated.timing(gridFade, { toValue: 1, duration: 150, useNativeDriver: true }).start();
 
       barbersLoadedRef.current = true;
       lastBarberIdRef.current = selectedBarberId;
     } else {
-      // Light load: only day appointments (date changed, everything else cached)
+      // Light load: always fetch fresh for current day (handles onActionComplete + date change)
       const apptsRes = await fetchShopDayAppointments(supabase, { shopId, date: selectedDateStr });
+      if (seq !== fetchSeqRef.current) return; // stale response — discard
       const appts = (apptsRes.data ?? []).map(mapAppointmentRow);
+      apptCacheRef.current[selectedDateStr] = appts;
       setAppointmentsDay(appts);
       Animated.timing(gridFade, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+
+      // Prefetch nearby days in background — stagger to avoid hammering DB
+      const prefetchDay = async (d: string) => {
+        if (apptCacheRef.current[d]) return;
+        const res = await fetchShopDayAppointments(supabase, { shopId, date: d });
+        apptCacheRef.current[d] = (res.data ?? []).map(mapAppointmentRow);
+      };
+      const sel = parse(selectedDateStr, "yyyy-MM-dd", new Date());
+      void prefetchDay(format(addDays(sel, 1), "yyyy-MM-dd"));
+      void prefetchDay(format(addDays(sel, -1), "yyyy-MM-dd"));
+      setTimeout(() => {
+        for (let i = 2; i <= 5; i++) {
+          void prefetchDay(format(addDays(sel, i), "yyyy-MM-dd"));
+        }
+      }, 500);
     }
     } finally {
       setLoading(false);
@@ -351,11 +374,15 @@ export default function CalendarScreen() {
     () => [{ table: "appointments", filter: `shop_id=eq.${shopId}` }],
     [shopId],
   );
+  const onRealtimeSync = useCallback(() => {
+    apptCacheRef.current = {}; // invalidate cache on realtime changes
+    fetchCalendarData();
+  }, [fetchCalendarData]);
   useRealtimeSync({
     channelName: "cal",
     key: shopId,
     tables: calTables,
-    onSync: fetchCalendarData,
+    onSync: onRealtimeSync,
     pollInterval: 60_000,
   });
 
@@ -576,9 +603,17 @@ export default function CalendarScreen() {
 
   const onGridLayout = useCallback((e: LayoutChangeEvent) => {
     setGridViewportH(e.nativeEvent.layout.height);
-    (e.target as any).measureInWindow?.((x: number, y: number) => {
+    // Measure the ScrollView viewport's position on screen (stays fixed)
+    (e.target as any).measureInWindow?.((_x: number, y: number) => {
       gridTopPageY.current = y;
     });
+  }, []);
+
+  /** Convert pageY → content Y inside the grid.
+   *  gridTopPageY = ScrollView viewport top (fixed on screen).
+   *  gridScrollYRef = current scroll offset within the ScrollView. */
+  const pageYToContentY = useCallback((pageY: number): number => {
+    return pageY - gridTopPageY.current + gridScrollYRef.current;
   }, []);
 
   const shadingSlices = useMemo(() => {
@@ -673,11 +708,6 @@ export default function CalendarScreen() {
     return b ? firstName(b) : "";
   }, [selectedBarberId, barberId, barbers]);
 
-  const initialLetter = (b: Barber) => {
-    const raw = b.display_name?.trim() || b.name.trim();
-    return (raw[0] || "?").toUpperCase();
-  };
-
   const lastAutoScrollPageY = useRef(0);
   const gridTopPageY = useRef(0);
 
@@ -771,57 +801,12 @@ export default function CalendarScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View ref={screenRef} style={styles.root} collapsable={false}>
-        <ScrollView
-          ref={teamScrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.teamStripContent}
-          style={styles.teamStrip}
-        >
-          {barbers.map((b) => {
-            const active = b.id === selectedBarberId;
-            return (
-              <TouchableOpacity
-                key={b.id}
-                style={styles.teamItem}
-                onPress={() => {
-                  setSelectedBarberId(b.id);
-                  Haptics.selectionAsync();
-                }}
-                activeOpacity={0.85}
-              >
-                <View
-                  style={[
-                    styles.avatarRing,
-                    active ? styles.avatarRingActive : styles.avatarRingIdle,
-                  ]}
-                >
-                  {b.avatar_url ? (
-                    <Image
-                      source={{ uri: b.avatar_url }}
-                      style={styles.avatarImg}
-                    />
-                  ) : (
-                    <View style={styles.avatarFallback}>
-                      <Text style={styles.avatarFallbackText}>
-                        {initialLetter(b)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text
-                  style={[
-                    styles.teamName,
-                    active ? styles.teamNameActive : styles.teamNameIdle,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {firstName(b)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        <TeamStrip
+          barbers={barbers}
+          selectedBarberId={selectedBarberId}
+          onSelectBarber={setSelectedBarberId}
+          scrollRef={teamScrollRef}
+        />
 
         <ScrollView
           ref={dateScrollRef}
@@ -845,9 +830,19 @@ export default function CalendarScreen() {
                   ]}
                   onPress={() => {
                     if (dateStr === selectedDateStr) return;
-                    Animated.timing(gridFade, { toValue: 0, duration: 80, useNativeDriver: true }).start(() => {
+                    const cached = apptCacheRef.current[dateStr];
+                    if (cached) {
+                      // Instant swap — apply cached data + date in same render batch
+                      setAppointmentsDay(cached);
+                      gridFade.setValue(0.85);
                       setselectedDateStr(dateStr);
-                    });
+                      Animated.timing(gridFade, { toValue: 1, duration: 60, useNativeDriver: true }).start();
+                    } else {
+                      // Clear stale cards + hide grid instantly, then fetch
+                      setAppointmentsDay([]);
+                      gridFade.setValue(0);
+                      setselectedDateStr(dateStr);
+                    }
                     Haptics.selectionAsync();
                   }}
                   activeOpacity={0.85}
@@ -941,6 +936,7 @@ export default function CalendarScreen() {
             <View style={styles.gridDivider} />
             <View style={styles.calendarCol}>
               <View
+                ref={paperColumnRef}
                 style={[
                   styles.paperColumn,
                   { height: gridHeight },
@@ -952,8 +948,7 @@ export default function CalendarScreen() {
                   return true;
                 }}
                 onResponderGrant={(e) => {
-                  // Convert pageY → content Y (reliable inside ScrollView)
-                  const locY = e.nativeEvent.pageY - gridTopPageY.current + gridScrollYRef.current;
+                  const locY = pageYToContentY(e.nativeEvent.pageY);
                   setSlotMenu(null);
                   didMoveRef.current = false;
                   touchStartYRef.current = locY;
@@ -1003,7 +998,7 @@ export default function CalendarScreen() {
                   }, 350);
                 }}
                 onResponderMove={(e) => {
-                  const locY = e.nativeEvent.pageY - gridTopPageY.current + gridScrollYRef.current;
+                  const locY = pageYToContentY(e.nativeEvent.pageY);
                   const moved = Math.abs(locY - touchStartYRef.current) > 8;
                   if (moved) didMoveRef.current = true;
 
@@ -1665,80 +1660,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: COLORS.deep,
-  },
-  teamStrip: {
-    backgroundColor: COLORS.deep,
-    maxHeight: 98,
-    flexGrow: 0,
-    flexShrink: 0,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(245,243,239,0.06)",
-  },
-  teamStripContent: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    paddingTop: 8,
-    paddingBottom: 10,
-    paddingHorizontal: 14,
-    gap: 16,
-  },
-  teamItem: {
-    alignItems: "center",
-    width: 68,
-  },
-  avatarRing: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarRingActive: {
-    borderWidth: 3,
-    borderColor: COLORS.novaGold,
-    shadowColor: COLORS.novaGold,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  avatarRingIdle: {
-    borderWidth: 1.5,
-    borderColor: "rgba(245,243,239,0.10)",
-  },
-  avatarImg: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-  },
-  avatarFallback: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.obsidian600,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarFallbackText: {
-    fontSize: 18,
-    fontWeight: "600",
-    fontFamily: "Satoshi-Bold",
-    color: colors.textPrimary,
-  },
-  teamName: {
-    marginTop: 6,
-    fontSize: 11,
-    textAlign: "center",
-    maxWidth: 62,
-  },
-  teamNameActive: {
-    fontWeight: "600",
-    fontFamily: "Satoshi-Bold",
-    color: colors.textPrimary,
-  },
-  teamNameIdle: {
-    fontWeight: "400",
-    fontFamily: "Satoshi-Regular",
-    color: COLORS.slate,
   },
   dateStrip: {
     backgroundColor: COLORS.deep,
