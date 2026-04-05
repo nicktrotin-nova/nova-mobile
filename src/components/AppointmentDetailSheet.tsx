@@ -320,11 +320,20 @@ export default function AppointmentDetailSheet({
       priceOverride: localPrice ?? undefined,
     });
 
-    if (result.success) {
-      Alert.alert("Completed", result.toastMessage);
-      onActionComplete();
-      onClose();
+    if (!result.success) {
+      Alert.alert("Error", result.message);
+      return;
     }
+
+    // Card payments via PaymentSheet not yet supported from detail sheet — only MyDayScreen
+    if ("needsPaymentSheet" in result) {
+      Alert.alert("Card payments", "Use the My Day screen to accept card payments");
+      return;
+    }
+
+    Alert.alert("Completed", result.toastMessage);
+    onActionComplete();
+    onClose();
   };
 
   const handleCancel = () => {

@@ -61,40 +61,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setLoading(true);
 
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role, shop_id")
-        .eq("user_id", user.id);
+      try {
+        const { data: roles, error: rolesError } = await supabase
+          .from("user_roles")
+          .select("role, shop_id")
+          .eq("user_id", user.id);
 
-      const roleSet = new Set((roles ?? []).map((r: any) => r.role));
 
-      let primaryRole: AppRole = "client";
-      if (roleSet.has("shop_owner")) primaryRole = "shop_owner";
-      else if (roleSet.has("barber")) primaryRole = "barber";
+        const roleSet = new Set((roles ?? []).map((r: any) => r.role));
 
-      let resolvedBarberId: string | null = null;
-      let resolvedShopId: string | null = null;
+        let primaryRole: AppRole = "client";
+        if (roleSet.has("shop_owner")) primaryRole = "shop_owner";
+        else if (roleSet.has("barber")) primaryRole = "barber";
 
-      if (roleSet.has("barber") || roleSet.has("shop_owner")) {
-        const { data: barber } = await supabase
-          .from("barbers")
-          .select("id, shop_id")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        resolvedBarberId = barber?.id ?? null;
-        if (primaryRole === "shop_owner") {
-          const ownerRole = (roles ?? []).find((r: any) => r.role === "shop_owner");
-          resolvedShopId = (ownerRole as any)?.shop_id ?? null;
-        } else {
-          resolvedShopId = barber?.shop_id ?? null;
+        let resolvedBarberId: string | null = null;
+        let resolvedShopId: string | null = null;
+
+        if (roleSet.has("barber") || roleSet.has("shop_owner")) {
+          const { data: barberRows, error: barberError } = await supabase
+            .from("barbers")
+            .select("id, shop_id")
+            .eq("user_id", user.id)
+            .limit(1);
+          const barber = barberRows?.[0] ?? null;
+          resolvedBarberId = barber?.id ?? null;
+          if (primaryRole === "shop_owner") {
+            const ownerRole = (roles ?? []).find((r: any) => r.role === "shop_owner");
+            resolvedShopId = (ownerRole as any)?.shop_id ?? null;
+          } else {
+            resolvedShopId = barber?.shop_id ?? null;
+          }
         }
-      }
 
-      if (!cancelled) {
-        setRole(primaryRole);
-        setBarberId(resolvedBarberId);
-        setShopId(resolvedShopId);
-        setLoading(false);
+        if (!cancelled) {
+          setRole(primaryRole);
+          setBarberId(resolvedBarberId);
+          setShopId(resolvedShopId);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setRole(null);
+          setBarberId(null);
+          setShopId(null);
+          setLoading(false);
+        }
       }
     };
 

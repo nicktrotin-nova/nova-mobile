@@ -21,6 +21,8 @@ import {
   TrendingDown,
   Minus,
   CircleCheck,
+  ArrowUpRight,
+  Landmark,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import ViewShot, { captureRef } from "react-native-view-shot";
@@ -133,6 +135,14 @@ export default function WalletScreen() {
   const [heroCardWidth, setHeroCardWidth] = useState(0);
   const [heroCardHeight, setHeroCardHeight] = useState(0);
 
+  // ── Stripe wallet balance ──
+  const [stripeBalance, setStripeBalance] = useState<{
+    connected: boolean;
+    available: number;
+    pending: number;
+  } | null>(null);
+  const [cashingOut, setCashingOut] = useState(false);
+
   const progressAnim = useRef(new Animated.Value(0)).current;
   const countUpAnim = useRef(new Animated.Value(0)).current;
   const [displayedAmount, setDisplayedAmount] = useState(0);
@@ -220,7 +230,42 @@ export default function WalletScreen() {
       0,
     );
     setLastWeekTotal(lwTotal);
+
+    // Fetch Stripe balance (non-blocking — wallet works without it)
+    supabase.functions
+      .invoke("get-wallet-balance", { body: { barber_id: barberId } })
+      .then(({ data }) => {
+        if (data?.success) {
+          setStripeBalance({
+            connected: data.connected ?? false,
+            available: Number(data.available ?? 0),
+            pending: Number(data.pending ?? 0),
+          });
+        }
+      })
+      .catch(() => {
+        // Stripe balance is supplementary — don't block the screen
+      });
   }, [barberId]);
+
+  const handleCashOut = async () => {
+    if (!barberId || !stripeBalance?.available || cashingOut) return;
+    setCashingOut(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    const { data, error } = await supabase.functions.invoke("cash-out", {
+      body: { barber_id: barberId },
+    });
+
+    if (!error && data?.success) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setStripeBalance((prev) =>
+        prev ? { ...prev, available: 0, pending: prev.pending + prev.available } : prev,
+      );
+    }
+
+    setCashingOut(false);
+  };
 
   const { loading, refreshing, onRefresh, refetch } = useScreenData(
     fetchData,
@@ -253,23 +298,31 @@ export default function WalletScreen() {
   );
 
   // ── Computed ──
-  const collected = useMemo(
-    () =>
-      appointments.reduce(
-        (sum, a) => sum + Number(a.price_charged ?? 0),
-        0,
-      ),
-    [appointments],
-  );
+  // Split by payment method: only digital counts toward rent, cash is always the barber's
+  const { digitalCollected, cashCollected, collected } = useMemo(() => {
+    let digital = 0;
+    let cash = 0;
+    for (const a of appointments) {
+      const amount = Number(a.price_charged ?? 0);
+      if (a.payment_method === "cash") {
+        cash += amount;
+      } else {
+        digital += amount;
+      }
+    }
+    return { digitalCollected: digital, cashCollected: cash, collected: digital + cash };
+  }, [appointments]);
   const rentDue = Number(activeLease?.rent_amount ?? ledger?.rent_due ?? 0);
-  const takeHome = Math.max(0, collected - rentDue);
-  const rentPct = rentDue > 0 ? Math.min(1, collected / rentDue) : 0;
+  // Take-home = all cash (always theirs) + whatever digital exceeds rent
+  const takeHome = cashCollected + Math.max(0, digitalCollected - rentDue);
+  // Rent progress: only digital payments
+  const rentPct = rentDue > 0 ? Math.min(1, digitalCollected / rentDue) : 0;
   const percentage = Math.round(rentPct * 100);
-  const rentRemaining = Math.max(0, rentDue - collected);
+  const rentRemaining = Math.max(0, rentDue - digitalCollected);
   const rentCovered = rentRemaining <= 0 && rentDue > 0;
   const hasRent = rentDue > 0;
 
-  // Week-over-week delta
+  // Week-over-week delta (simplified — assumes similar cash/digital mix)
   const lastWeekTakeHome = Math.max(0, lastWeekTotal - rentDue);
   const delta = takeHome - lastWeekTakeHome;
   const deltaAbs = Math.abs(delta);
@@ -495,6 +548,54 @@ export default function WalletScreen() {
             {isSharing && <Text style={styles.shareBranding}>Nova</Text>}
           </View>
         </ViewShot>
+
+        {/* ── Stripe Wallet Balance ── */}
+        {stripeBalance?.connected && !isSharing && (
+          <View style={styles.stripeCard}>
+            <View style={styles.stripeBalanceRow}>
+              <View style={styles.stripeBalanceCol}>
+                <Text style={styles.stripeBalanceLabel}>Available</Text>
+                <Text style={styles.stripeBalanceAmount}>
+                  {formatCurrencySmart(stripeBalance.available)}
+                </Text>
+              </View>
+              {stripeBalance.pending > 0 && (
+                <View style={styles.stripeBalanceCol}>
+                  <Text style={styles.stripeBalanceLabel}>Pending</Text>
+                  <Text style={styles.stripeBalancePending}>
+                    {formatCurrencySmart(stripeBalance.pending)}
+                  </Text>
+                </View>
+              )}
+            </View>
+            {stripeBalance.available > 0 && (
+              <TouchableOpacity
+                style={styles.cashOutBtn}
+                onPress={handleCashOut}
+                activeOpacity={0.85}
+                delayPressIn={0}
+                disabled={cashingOut}
+              >
+                <View pointerEvents="none">
+                  <ArrowUpRight size={16} color={colors.textInverse} strokeWidth={2.5} />
+                </View>
+                <Text style={styles.cashOutText}>
+                  {cashingOut ? "Sending..." : "Cash Out"}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {stripeBalance.available === 0 && stripeBalance.pending === 0 && (
+              <View style={styles.stripEmptyRow}>
+                <View pointerEvents="none">
+                  <Landmark size={16} color={DIM} strokeWidth={2} />
+                </View>
+                <Text style={styles.stripeEmptyText}>
+                  Earnings arrive after card payments
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* ── Appointments ── */}
         <View style={styles.sectionWrap}>
@@ -751,6 +852,71 @@ const styles = StyleSheet.create({
   },
   summaryText: {
     fontSize: 12,
+    fontFamily: "Satoshi-Regular",
+    color: DIM,
+  },
+
+  // ── Stripe Wallet ──
+  stripeCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: colors.obsidian800,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  stripeBalanceRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  stripeBalanceCol: {
+    alignItems: "center",
+  },
+  stripeBalanceLabel: {
+    fontSize: 11,
+    fontFamily: "Satoshi-Medium",
+    color: DIM,
+    letterSpacing: 0.5,
+    textTransform: "uppercase" as const,
+  },
+  stripeBalanceAmount: {
+    marginTop: 4,
+    fontSize: 22,
+    fontFamily: "DMSerifText-Regular",
+    color: NOVA_GREEN,
+  },
+  stripeBalancePending: {
+    marginTop: 4,
+    fontSize: 22,
+    fontFamily: "DMSerifText-Regular",
+    color: MUTED,
+  },
+  cashOutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: NOVA_GREEN,
+  },
+  cashOutText: {
+    fontSize: 15,
+    fontFamily: "Satoshi-Bold",
+    color: colors.textInverse,
+  },
+  stripEmptyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  stripeEmptyText: {
+    fontSize: 13,
     fontFamily: "Satoshi-Regular",
     color: DIM,
   },

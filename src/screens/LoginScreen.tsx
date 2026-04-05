@@ -8,8 +8,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../lib/supabase";
+import { colors } from "../theme/colors";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -17,6 +20,26 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleForgotPassword = () => {
+    Alert.prompt(
+      "Reset password",
+      "Enter your email address and we'll send you a reset link.",
+      async (inputEmail) => {
+        if (!inputEmail?.trim()) return;
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+          inputEmail.trim()
+        );
+        if (resetError) {
+          Alert.alert("Error", "Could not send reset email. Check the address and try again.");
+        } else {
+          Alert.alert("Check your inbox", "A password reset link has been sent if that email exists.");
+        }
+      },
+      "plain-text",
+      email
+    );
+  };
 
   const handleSubmit = async () => {
     setError(null);
@@ -43,7 +66,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Email"
-            placeholderTextColor="#7BA7C2"
+            placeholderTextColor={colors.textGhost}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -54,7 +77,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Password"
-            placeholderTextColor="#7BA7C2"
+            placeholderTextColor={colors.textGhost}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -74,7 +97,9 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
-          <Text style={styles.forgot}>Forgot password?</Text>
+          <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7}>
+            <Text style={styles.forgot}>Forgot password?</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -84,72 +109,75 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0D2137",
+    backgroundColor: colors.obsidian900,
     justifyContent: "center",
-    padding: 20,
+    padding: 24,
   },
   inner: {
     flex: 1,
     justifyContent: "center",
   },
   card: {
-    backgroundColor: "#FAFCFE",
-    borderRadius: 14,
-    padding: 24,
     width: "100%",
     maxWidth: 400,
     alignSelf: "center",
   },
   wordmark: {
-    fontSize: 28,
+    fontSize: 36,
     fontWeight: "500",
-    color: "#0D2137",
+    color: colors.nova500,
     textAlign: "center",
+    fontFamily: "DMSerifText-Regular",
   },
   subtitle: {
     fontSize: 14,
-    color: "#7BA7C2",
+    fontFamily: "Satoshi-Regular",
+    color: colors.textSecondary,
     textAlign: "center",
-    marginTop: 4,
-    marginBottom: 24,
+    marginTop: 8,
+    marginBottom: 32,
   },
   error: {
     fontSize: 13,
-    color: "#DC2626",
+    fontFamily: "Satoshi-Regular",
+    color: colors.error,
     textAlign: "center",
     marginBottom: 16,
   },
   input: {
-    height: 44,
-    borderRadius: 8,
+    height: 48,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#DDE6EF",
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: "#0D2137",
+    borderColor: colors.borderMedium,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    fontFamily: "Satoshi-Regular",
+    color: colors.textPrimary,
     marginBottom: 14,
-    backgroundColor: "#fff",
+    backgroundColor: colors.obsidian600,
   },
   button: {
-    height: 44,
-    borderRadius: 8,
-    backgroundColor: "#0D2137",
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: colors.nova500,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 4,
+    marginTop: 8,
   },
   buttonDisabled: {
-    backgroundColor: "#163552",
+    backgroundColor: colors.nova600,
   },
   buttonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
+    color: colors.textInverse,
+    fontSize: 15,
+    fontWeight: "600",
+    fontFamily: "Satoshi-Medium",
   },
   forgot: {
-    fontSize: 12,
-    color: "#7BA7C2",
+    fontSize: 13,
+    fontFamily: "Satoshi-Regular",
+    color: colors.textTertiary,
     textAlign: "center",
-    marginTop: 16,
+    marginTop: 20,
   },
 });

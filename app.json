@@ -13,7 +13,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Nova needs access to your photos to set your profile picture.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.getnova.novamobile"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,10 +26,34 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Nova needs access to your photos to set your profile picture."
+        }
+      ],
+      "expo-font",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.getnova.novamobile",
+          "enableApplePay": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0a0a328a-fc7b-4e35-9dc1-251f8f11698d"
+      }
     }
   }
 }

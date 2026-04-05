@@ -116,9 +116,8 @@ export default function BarberDetailSheet({
     } | null;
     const lease = leaseRes.data as { rent_amount: number | null } | null;
     const due = Number(lease?.rent_amount ?? ledger?.rent_due ?? 0);
-    const collected =
-      Number(ledger?.collected_digital ?? 0) +
-      Number(ledger?.collected_cash_reported ?? 0);
+    // Only digital (card/prepaid) payments count toward rent — cash does not
+    const collected = Number(ledger?.collected_digital ?? 0);
     setRentDue(due);
     setRentCollected(collected);
     setLoading(false);
