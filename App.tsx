@@ -4,19 +4,15 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { CalendarCheck, Wallet, Calendar, MoreHorizontal, AlertTriangle } from "lucide-react-native";
+import { Sun, Wallet, Calendar, MoreHorizontal, AlertTriangle } from "lucide-react-native";
+import * as Haptics from "expo-haptics";
 
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
 import LoginScreen from "./src/screens/LoginScreen";
 import MyDayScreen from "./src/screens/MyDayScreen";
 import WalletScreen from "./src/screens/WalletScreen";
-
-function CalendarScreen() {
-  return <View style={{ flex: 1, backgroundColor: "#0F1923" }} />;
-}
-function MoreScreen() {
-  return <View style={{ flex: 1, backgroundColor: "#0F1923" }} />;
-}
+import CalendarScreen from "./src/screens/CalendarScreen";
+import MoreStack from "./src/navigation/MoreStack";
 
 // --- Error Boundary ---
 interface ErrorBoundaryProps {
@@ -124,16 +120,21 @@ function AppContent() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: "#0A1220",
-          borderTopColor: "rgba(255,255,255,0.06)",
-          borderTopWidth: 1,
-          height: 60,
+          backgroundColor: "#131518",
+          borderTopWidth: 0,
+          height: 75,
+          paddingBottom: 8,
         },
         tabBarActiveTintColor: "#00D68F",
-        tabBarInactiveTintColor: "#7BA7C2",
+        tabBarInactiveTintColor: "rgba(245,243,239,0.40)",
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "500",
+          fontSize: 11,
+          fontFamily: "Satoshi-Medium",
+        },
+      }}
+      screenListeners={{
+        tabPress: () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         },
       }}
     >
@@ -142,7 +143,7 @@ function AppContent() {
         component={MyDayScreen}
         options={{
           tabBarLabel: "My Day",
-          tabBarIcon: ({ color, size }) => <CalendarCheck color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Sun color={color} size={size} />,
         }}
       />
       <Tab.Screen
@@ -163,7 +164,7 @@ function AppContent() {
       />
       <Tab.Screen
         name="More"
-        component={MoreScreen}
+        component={MoreStack}
         options={{
           tabBarLabel: "More",
           tabBarIcon: ({ color, size }) => <MoreHorizontal color={color} size={size} />,
