@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Users,
   Building2,
+  UserPlus,
 } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -33,6 +34,7 @@ import type { MoreStackParamList } from "../navigation/MoreStack";
 import type { RootTabParamList } from "../navigation/RootTabParamList";
 import { colors, BG, NOVA_GREEN, LABEL, MUTED, DIM } from "../theme/colors";
 import { useScreenData } from "../hooks/useScreenData";
+import InviteBarberSheet from "../components/owner/InviteBarberSheet";
 
 const ICON_ROW = colors.textSecondary;
 const CHEVRON = "rgba(255,255,255,0.15)";
@@ -61,6 +63,7 @@ export default function MoreScreen() {
   };
   const [barber, setBarber] = useState<BarberRow | null>(null);
   const [shopName, setShopName] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
 
   const loadBarber = useCallback(async () => {
     if (!barberId) return;
@@ -145,6 +148,11 @@ export default function MoreScreen() {
               label={shopName || "My Shop"}
               onPress={() => stackNav.navigate("OwnerOverlay" as never)}
             />
+            <MenuRow
+              icon={<UserPlus size={20} color={NOVA_GREEN} />}
+              label="Invite Barber"
+              onPress={() => setShowInvite(true)}
+            />
           </>
         )}
 
@@ -215,6 +223,13 @@ export default function MoreScreen() {
 
         <Text style={styles.footer}>Nova v0.1.0</Text>
       </ScrollView>
+
+      {isOwner && (
+        <InviteBarberSheet
+          visible={showInvite}
+          onClose={() => setShowInvite(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }

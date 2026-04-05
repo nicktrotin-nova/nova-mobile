@@ -6,7 +6,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  TouchableOpacity,
 } from "react-native";
+import { UserPlus } from "lucide-react-native";
 import { format, startOfWeek } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { supabase } from "../../lib/supabase";
@@ -93,6 +95,7 @@ export default function OwnerGlanceScreen() {
 
   const [cards, setCards] = useState<BarberCardData[]>([]);
   const [totalWeek, setTotalWeek] = useState(0);
+  const [pendingInvites, setPendingInvites] = useState(0);
   const [selectedBarber, setSelectedBarber] = useState<BarberCardData | null>(null);
   const [showDetail, setShowDetail] = useState(false);
 
@@ -122,13 +125,14 @@ export default function OwnerGlanceScreen() {
 
       const ids = barbers.map((b: BarberRow) => b.id);
 
-      // 2–6: Parallel queries
+      // 2–7: Parallel queries (including pending invites count)
       const [
         { data: todayAppts },
         { data: weekAppts },
         { data: schedules },
         { data: ledgers },
         { data: leases },
+        { count: inviteCount },
       ] = await Promise.all([
         supabase
           .from("appointments")
@@ -163,6 +167,12 @@ export default function OwnerGlanceScreen() {
           .select("barber_id, rent_amount")
           .in("barber_id", ids)
           .eq("status", "active"),
+
+        supabase
+          .from("barber_invites")
+          .select("id", { count: "exact", head: true })
+          .eq("shop_id", shopId)
+          .eq("status", "pending"),
       ]);
 
       // ── Build BarberCardData per barber ──────────────────────────────────
@@ -274,6 +284,7 @@ export default function OwnerGlanceScreen() {
       const weekTotal = cardData.reduce((sum, c) => sum + c.weekRevenue, 0);
       setCards(cardData);
       setTotalWeek(weekTotal);
+      setPendingInvites(inviteCount ?? 0);
     } catch {
       // Screen remains in whatever state it was
     }
@@ -316,6 +327,18 @@ export default function OwnerGlanceScreen() {
               <Text style={styles.headerWeekTotal}>{fmtMoney(totalWeek)}</Text>
             </View>
           </View>
+
+          {/* ── Pending invites badge ──────────────────────────────────── */}
+          {pendingInvites > 0 && (
+            <View style={styles.pendingBadge}>
+              <View pointerEvents="none">
+                <UserPlus size={16} color={NOVA_GREEN} />
+              </View>
+              <Text style={styles.pendingText}>
+                {pendingInvites} pending invite{pendingInvites !== 1 ? "s" : ""}
+              </Text>
+            </View>
+          )}
 
           {/* ── Cards ───────────────────────────────────────────────────── */}
           {cards.length === 0 ? (
@@ -408,6 +431,24 @@ const styles = StyleSheet.create({
     fontFamily: "DMSerifText-Regular",
     color: NOVA_GREEN,
     lineHeight: 28,
+  },
+
+  // Pending invites
+  pendingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(0,214,143,0.08)",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  pendingText: {
+    fontSize: 13,
+    fontFamily: "Satoshi-Medium",
+    fontWeight: "500",
+    color: NOVA_GREEN,
   },
 
   emptyWrap: {
