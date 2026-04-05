@@ -16,7 +16,7 @@ export const COLORS = {
   warmBg: colors.calendarBody,
   unavailable: colors.calendarUnavailable,
   white: colors.white,
-  cardBorder: "rgba(0,0,0,0.06)",
+  cardBorder: colors.black06,
   blockBg: colors.calendarBlockBg,
   red: colors.error,
   amber: colors.warning,

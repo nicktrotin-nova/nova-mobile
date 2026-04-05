@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+// Row shapes for callers to cast results: RawAppointment, BusySlotRow,
+// HistoryAppointmentRow, AppointmentCountRow (see ../types/domain.ts)
 
 // ─── Select shapes ──────────────────────────────────────────────────────────
 

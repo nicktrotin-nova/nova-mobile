@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { Alert } from "react-native";
 import { supabase } from "../lib/supabase";
 import type { User, Session } from "@supabase/supabase-js";
+import type { UserRoleRow } from "../types/domain";
 
 type AppRole = "shop_owner" | "barber" | "client";
 
@@ -68,7 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq("user_id", user.id);
 
 
-        const roleSet = new Set((roles ?? []).map((r: any) => r.role));
+        const typedRoles = (roles ?? []) as UserRoleRow[];
+        const roleSet = new Set(typedRoles.map((r) => r.role));
 
         let primaryRole: AppRole = "client";
         if (roleSet.has("shop_owner")) primaryRole = "shop_owner";
@@ -78,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let resolvedShopId: string | null = null;
 
         if (roleSet.has("barber") || roleSet.has("shop_owner")) {
-          const { data: barberRows, error: barberError } = await supabase
+          const { data: barberRows } = await supabase
             .from("barbers")
             .select("id, shop_id")
             .eq("user_id", user.id)
@@ -86,8 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const barber = barberRows?.[0] ?? null;
           resolvedBarberId = barber?.id ?? null;
           if (primaryRole === "shop_owner") {
-            const ownerRole = (roles ?? []).find((r: any) => r.role === "shop_owner");
-            resolvedShopId = (ownerRole as any)?.shop_id ?? null;
+            const ownerRole = typedRoles.find((r) => r.role === "shop_owner");
+            resolvedShopId = ownerRole?.shop_id ?? null;
           } else {
             resolvedShopId = barber?.shop_id ?? null;
           }
@@ -100,11 +103,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
         }
       } catch (err) {
+        console.error("[Auth] loadProfile failed:", err);
         if (!cancelled) {
           setRole(null);
           setBarberId(null);
           setShopId(null);
           setLoading(false);
+          Alert.alert(
+            "Connection issue",
+            "Couldn't load your profile — rent data may be stale. Pull down to refresh.",
+          );
         }
       }
     };

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import {
+  GestureResponderEvent,
   LayoutAnimation,
   LayoutChangeEvent,
   ScrollView,
@@ -82,7 +83,10 @@ export function useGridDrag({
 
   const onGridLayout = useCallback((e: LayoutChangeEvent) => {
     setGridViewportH(e.nativeEvent.layout.height);
-    (e.target as any).measureInWindow?.((_x: number, y: number) => {
+    const target = e.target as unknown as {
+      measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
+    };
+    target.measureInWindow?.((_x: number, y: number) => {
       gridTopPageY.current = y;
     });
   }, []);
@@ -171,7 +175,7 @@ export function useGridDrag({
   );
 
   const onResponderGrant = useCallback(
-    (e: any) => {
+    (e: GestureResponderEvent) => {
       const locY = pageYToContentY(e.nativeEvent.pageY);
       setSlotMenu(null);
       didMoveRef.current = false;
@@ -222,7 +226,7 @@ export function useGridDrag({
   );
 
   const onResponderMove = useCallback(
-    (e: any) => {
+    (e: GestureResponderEvent) => {
       const locY = pageYToContentY(e.nativeEvent.pageY);
       const moved = Math.abs(locY - touchStartYRef.current) > 8;
       if (moved) didMoveRef.current = true;

@@ -13,6 +13,7 @@ import { captureRef } from "react-native-view-shot";
 import { LinearGradient } from "expo-linear-gradient";
 import { Share2 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
+import { colors } from "../theme/colors";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 const DIAG = Math.sqrt(SCREEN_W * SCREEN_W + SCREEN_H * SCREEN_H);
@@ -578,13 +579,13 @@ const styles = StyleSheet.create({
     position: "absolute",
   },
   toastContainer: {
-    backgroundColor: "rgba(19,21,24,0.92)",
+    backgroundColor: colors.canvas92,
     paddingHorizontal: 36,
     paddingVertical: 24,
     borderRadius: 20,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(0,214,143,0.3)",
+    borderColor: colors.nova30,
     shadowColor: "#00D68F",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
@@ -605,7 +606,7 @@ const styles = StyleSheet.create({
   toastSub: {
     fontFamily: "Satoshi-Medium",
     fontSize: 15,
-    color: "rgba(245,243,239,0.65)",
+    color: colors.warmWhite65,
     marginTop: 6,
     textAlign: "center",
   },
@@ -616,13 +617,13 @@ const styles = StyleSheet.create({
   shareBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(19,21,24,0.85)",
+    backgroundColor: colors.canvas85,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 16,
     gap: 8,
     borderWidth: 1,
-    borderColor: "rgba(0,214,143,0.2)",
+    borderColor: colors.nova20,
   },
   shareBtnText: {
     fontFamily: "Satoshi-Medium",

@@ -271,8 +271,8 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   pillSel: {
-    backgroundColor: "rgba(245,243,239,0.10)",
-    borderColor: "rgba(245,243,239,0.25)",
+    backgroundColor: colors.warmWhite10,
+    borderColor: colors.warmWhite25,
   },
   pillText: { fontSize: 14, fontWeight: "500", fontFamily: "Satoshi-Medium", color: MUTED },
   pillTextSel: { color: STEEL },
@@ -293,8 +293,8 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   slotOptionSel: {
-    backgroundColor: "rgba(245,243,239,0.08)",
-    borderColor: "rgba(245,243,239,0.20)",
+    backgroundColor: colors.warmWhite08,
+    borderColor: colors.warmWhite20,
   },
   slotValue: {
     fontSize: 16,
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     color: DIM,
     marginTop: 3,
   },
-  slotDescSel: { color: "rgba(245,243,239,0.50)" },
+  slotDescSel: { color: colors.warmWhite50 },
 
   // Note
   note: {
@@ -317,6 +317,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 12,
     fontFamily: "Satoshi-Regular",
-    color: "rgba(255,255,255,0.25)",
+    color: colors.white25,
   },
 });

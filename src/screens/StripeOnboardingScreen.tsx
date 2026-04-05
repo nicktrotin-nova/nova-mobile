@@ -13,8 +13,9 @@ import { colors } from "../theme/colors";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { MoreStackParamList } from "../navigation/MoreStack";
 
-type Props = NativeStackScreenProps<any>;
+type Props = NativeStackScreenProps<MoreStackParamList, "StripeOnboarding">;
 
 const RETURN_URL = "getnova.com.au/stripe/complete";
 const REFRESH_URL = "getnova.com.au/stripe/refresh";
@@ -74,8 +75,9 @@ export default function StripeOnboardingScreen({ navigation }: Props) {
 
       setOnboardingUrl(data.onboarding_url);
       setLoading(false);
-    } catch (err: any) {
-      setError(err?.message || "Something went wrong. Give it another go.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Something went wrong. Give it another go.";
+      setError(message);
       setLoading(false);
     }
   }, [isOwner, shopId, barberId, user?.email]);

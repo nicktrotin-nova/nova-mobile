@@ -216,8 +216,9 @@ export function createCheckoutEngine(deps: CheckoutDeps): CheckoutEngine {
               })
               .eq("id", ledger.id);
           }
-        } catch {
-          // Non-critical — ledger will reconcile
+        } catch (err) {
+          // Non-critical — ledger will reconcile, but log for visibility
+          console.error("[Checkout] Cash ledger update failed:", err);
         }
       }
 
@@ -266,9 +267,18 @@ export function createCheckoutEngine(deps: CheckoutDeps): CheckoutEngine {
     if (split.ledgerId && split.ownerAmount > 0) {
       try {
         await updateRentLedger(supabase, split.ledgerId, split.ownerAmount, method);
-      } catch {
-        // Appointment is already marked complete — log but don't fail the checkout
-        // The ledger will be reconciled on next cycle check
+      } catch (err) {
+        // Appointment is already marked complete — don't fail the checkout,
+        // but surface a warning so the barber knows rent tracking may be off
+        console.error("[Checkout] Rent ledger update failed:", err);
+        return {
+          success: true,
+          ownerAmount: split.ownerAmount,
+          barberAmount: split.barberAmount,
+          rentCovered: split.rentCovered,
+          toastMessage: `${formatSplitToast(split.ownerAmount, split.barberAmount)} (rent tracking may be delayed)`,
+          processedVia: "local_fallback" as const,
+        };
       }
     }
 

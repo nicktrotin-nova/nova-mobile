@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.borderMedium,
-    backgroundColor: "rgba(245,243,239,0.04)",
+    backgroundColor: colors.warmWhite04,
   },
   sharePillText: {
     fontSize: 13,

@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { Sun, Wallet, Calendar, MoreHorizontal, AlertTriangle } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 
+import { colors } from "./src/theme/colors";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
 import LoginScreen from "./src/screens/LoginScreen";
 import MyDayScreen from "./src/screens/MyDayScreen";
@@ -80,7 +81,7 @@ const errorStyles = StyleSheet.create({
   message: {
     fontFamily: "Satoshi-Regular",
     fontSize: 14,
-    color: "rgba(245, 243, 239, 0.4)",
+    color: colors.warmWhite40,
     textAlign: "center",
     marginBottom: 32,
     lineHeight: 20,
@@ -115,10 +116,23 @@ function AppContent() {
     return <LoginScreen />;
   }
 
+  const renderTabLabel = (label: string) => ({ focused, color }: { focused: boolean; color: string }) => (
+    <Text
+      style={{
+        fontSize: 11,
+        fontFamily: focused ? "Satoshi-Bold" : "Satoshi-Regular",
+        color,
+      }}
+    >
+      {label}
+    </Text>
+  );
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        animation: "fade",
         tabBarStyle: {
           backgroundColor: "#131518",
           borderTopWidth: 0,
@@ -126,11 +140,7 @@ function AppContent() {
           paddingBottom: 8,
         },
         tabBarActiveTintColor: "#00D68F",
-        tabBarInactiveTintColor: "rgba(245,243,239,0.40)",
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontFamily: "Satoshi-Medium",
-        },
+        tabBarInactiveTintColor: colors.warmWhite40,
       }}
       screenListeners={{
         tabPress: () => {
@@ -142,7 +152,7 @@ function AppContent() {
         name="MyDay"
         component={MyDayScreen}
         options={{
-          tabBarLabel: "My Day",
+          tabBarLabel: renderTabLabel("My Day"),
           tabBarIcon: ({ color, size }) => <Sun color={color} size={size} />,
         }}
       />
@@ -150,7 +160,7 @@ function AppContent() {
         name="Wallet"
         component={WalletScreen}
         options={{
-          tabBarLabel: "Wallet",
+          tabBarLabel: renderTabLabel("Wallet"),
           tabBarIcon: ({ color, size }) => <Wallet color={color} size={size} />,
         }}
       />
@@ -158,7 +168,7 @@ function AppContent() {
         name="Calendar"
         component={CalendarScreen}
         options={{
-          tabBarLabel: "Calendar",
+          tabBarLabel: renderTabLabel("Calendar"),
           tabBarIcon: ({ color, size }) => <Calendar color={color} size={size} />,
         }}
       />
@@ -166,7 +176,7 @@ function AppContent() {
         name="More"
         component={MoreStack}
         options={{
-          tabBarLabel: "More",
+          tabBarLabel: renderTabLabel("More"),
           tabBarIcon: ({ color, size }) => <MoreHorizontal color={color} size={size} />,
         }}
       />

@@ -270,8 +270,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.04)",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderBottomColor: colors.white04,
+    backgroundColor: colors.white03,
   },
   rowTextWrap: {
     flex: 1,
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     fontSize: 12,
     fontFamily: "Satoshi-Regular",
-    color: "rgba(255,255,255,0.25)",
+    color: colors.white25,
     textAlign: "center",
   },
 });

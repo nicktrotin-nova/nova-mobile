@@ -373,9 +373,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    backgroundColor: colors.white03,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.04)",
+    borderBottomColor: colors.white04,
   },
   menuRowWeb: {
     cursor: "pointer" as const,
@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   badgeAction: {
-    backgroundColor: "rgba(0, 214, 143, 0.12)",
+    backgroundColor: colors.nova12,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
   footer: {
     fontSize: 11,
     fontFamily: "Satoshi-Regular",
-    color: "rgba(255,255,255,0.15)",
+    color: colors.white15,
     textAlign: "center",
     marginTop: 40,
     marginBottom: 20,

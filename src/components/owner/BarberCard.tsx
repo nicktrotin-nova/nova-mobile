@@ -135,9 +135,9 @@ export default function BarberCard({ data, onPress }: Props) {
                 <LinearGradient
                   colors={[
                     "transparent",
-                    "rgba(0,214,143,0.9)",
+                    colors.nova90,
                     "transparent",
-                    "rgba(167,139,250,0.8)",
+                    colors.purple80,
                     "transparent",
                   ]}
                   locations={[0, 0.28, 0.5, 0.75, 1]}
@@ -156,7 +156,7 @@ export default function BarberCard({ data, onPress }: Props) {
             >
               <Circle
                 cx={RING / 2} cy={RING / 2} r={R}
-                stroke="rgba(255,255,255,0.06)"
+                stroke={colors.white06}
                 strokeWidth={STROKE}
                 fill="none"
               />
@@ -240,8 +240,8 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     overflow: "hidden",
   },
-  cardBorderActive: { borderColor: "rgba(255,255,255,0.10)" },
-  cardBorderOff:    { borderColor: "rgba(255,255,255,0.04)" },
+  cardBorderActive: { borderColor: colors.white10 },
+  cardBorderOff:    { borderColor: colors.white04 },
   cardOff:          { opacity: 0.40 },
 
   portraitWell: {
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     width: 0.5,
     marginTop: 16,
     marginBottom: 16,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.white06,
   },
 
   dataPanel: {
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   },
   identityDivider: {
     height: 0.5,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.white06,
   },
 
   statsContainer: {
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   },
   statRowBorder: {
     borderBottomWidth: 0.5,
-    borderBottomColor: "rgba(255,255,255,0.04)",
+    borderBottomColor: colors.white04,
   },
   statLabel: {
     fontSize: 11,

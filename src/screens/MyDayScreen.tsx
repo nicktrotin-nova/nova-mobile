@@ -5,6 +5,7 @@ import {
   useCallback,
   useRef,
 } from "react";
+import { useScreenData } from "../hooks/useScreenData";
 import {
   View,
   Text,
@@ -76,7 +77,7 @@ const TEXT_SECONDARY = colors.textSecondary;
 const TEXT_TERTIARY = colors.textTertiary;
 const TEXT_GHOST = colors.textGhost;
 
-const CATCH_LIGHT = "rgba(245,243,239,0.09)";
+const CATCH_LIGHT = colors.warmWhite09;
 const PRICE_ADJUST_STEP = 5;
 
 // ─── Layout Animation Config ────────────────────────────────────────────────
@@ -119,8 +120,6 @@ export default function MyDayScreen() {
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
 
   const [rentStatus, setRentStatus] = useState<RentStatus | null>(null);
@@ -198,7 +197,6 @@ export default function MyDayScreen() {
         // No cache available
       }
     }
-    setLoading(false);
   }, [barberId, today, cacheKey]);
 
   const fetchRent = useCallback(async () => {
@@ -211,12 +209,15 @@ export default function MyDayScreen() {
     }
   }, [barberId]);
 
-  // ── Effects ───────────────────────────────────────────────────────────────
+  // ── Screen data lifecycle ──────────────────────────────────────────────────
 
-  useEffect(() => {
-    fetchAppointments();
-    fetchRent();
-  }, [fetchAppointments, fetchRent]);
+  const { loading, refreshing, onRefresh, refetch } = useScreenData(
+    async () => {
+      await Promise.all([fetchAppointments(), fetchRent()]);
+    },
+    [fetchAppointments, fetchRent],
+    !!barberId,
+  );
 
   // Realtime subscription
   useEffect(() => {
@@ -232,15 +233,14 @@ export default function MyDayScreen() {
           filter: `barber_id=eq.${barberId}`,
         },
         () => {
-          fetchAppointments();
-          fetchRent();
+          refetch();
         },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [barberId, fetchAppointments, fetchRent]);
+  }, [barberId, refetch]);
 
   // Auto-scroll to next-up after initial load
   useEffect(() => {
@@ -262,14 +262,6 @@ export default function MyDayScreen() {
     const timeout = setTimeout(() => setToastMessage(null), 3000);
     return () => clearTimeout(timeout);
   }, [toastMessage]);
-
-  // ── Pull-to-refresh ───────────────────────────────────────────────────────
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([fetchAppointments(), fetchRent()]);
-    setRefreshing(false);
-  }, [fetchAppointments, fetchRent]);
 
   // ── Card expand/collapse ──────────────────────────────────────────────────
 
@@ -390,9 +382,8 @@ export default function MyDayScreen() {
   }, []);
 
   const onWalkInBooked = useCallback(() => {
-    fetchAppointments();
-    fetchRent();
-  }, [fetchAppointments, fetchRent]);
+    refetch();
+  }, [refetch]);
 
   // ── Loading state ─────────────────────────────────────────────────────────
 
@@ -990,7 +981,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(245,243,239,0.06)",
+    borderTopColor: colors.warmWhite06,
     alignItems: "center",
   },
 

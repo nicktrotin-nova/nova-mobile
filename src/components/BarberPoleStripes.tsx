@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { View } from "react-native";
 import Svg, { Line } from "react-native-svg";
+import { colors } from "../theme/colors";
 
 interface Props {
   width: number;
@@ -53,7 +54,7 @@ export default function BarberPoleStripes({ width, height }: Props) {
             y1={l.y1}
             x2={l.x2}
             y2={l.y2}
-            stroke="rgba(245,243,239,0.045)"
+            stroke={colors.warmWhite45}
             strokeWidth={STRIPE_WIDTH}
           />
         ))}

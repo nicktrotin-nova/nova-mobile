@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { colors } from "../theme/colors";
 
 interface HoloShimmerProps {
   width: number;
@@ -61,10 +62,10 @@ export default function HoloShimmer({ width, height }: HoloShimmerProps) {
       <LinearGradient
         colors={[
           "transparent",
-          "rgba(255,255,255,0.03)",
-          "rgba(0,214,143,0.06)",
-          "rgba(167,139,250,0.04)",
-          "rgba(255,255,255,0.03)",
+          colors.white03,
+          colors.nova06,
+          colors.purple04,
+          colors.white03,
           "transparent",
         ]}
         start={{ x: 0, y: 0.5 }}

@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(245,243,239,0.06)",
+    borderBottomColor: colors.warmWhite06,
   },
   content: {
     flexDirection: "row",
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   },
   avatarRingIdle: {
     borderWidth: 1.5,
-    borderColor: "rgba(245,243,239,0.10)",
+    borderColor: colors.warmWhite10,
   },
   avatarImg: {
     width: 62,
