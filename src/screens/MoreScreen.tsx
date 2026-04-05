@@ -146,7 +146,7 @@ export default function MoreScreen() {
             <MenuRow
               icon={<Building2 size={20} color={NOVA_GREEN} />}
               label={shopName || "My Shop"}
-              onPress={() => stackNav.navigate("OwnerOverlay" as never)}
+              onPress={() => openMoreStack("OwnerOverlay")}
             />
             <MenuRow
               icon={<UserPlus size={20} color={NOVA_GREEN} />}

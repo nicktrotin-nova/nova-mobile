@@ -8,6 +8,7 @@ import CalendarSettingsScreen from "../screens/CalendarSettingsScreen";
 import NotificationsScreen from "../screens/NotificationsScreen";
 import ClientsScreen from "../screens/ClientsScreen";
 import StripeOnboardingScreen from "../screens/StripeOnboardingScreen";
+import OwnerOverlayScreen from "../screens/owner/OwnerOverlayScreen";
 
 export type MoreStackParamList = {
   MoreMenu: undefined;
@@ -19,6 +20,7 @@ export type MoreStackParamList = {
   CalendarSettings: undefined;
   Notifications: undefined;
   StripeOnboarding: undefined;
+  OwnerOverlay: undefined;
 };
 
 const Stack = createNativeStackNavigator<MoreStackParamList>();
@@ -35,6 +37,7 @@ export default function MoreStack() {
       <Stack.Screen name="CalendarSettings" component={CalendarSettingsScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="StripeOnboarding" component={StripeOnboardingScreen} />
+      <Stack.Screen name="OwnerOverlay" component={OwnerOverlayScreen} />
     </Stack.Navigator>
   );
 }
