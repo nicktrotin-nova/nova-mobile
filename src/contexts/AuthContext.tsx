@@ -33,7 +33,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(nextSession?.user ?? null);
     });
 
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+    supabase.auth.getSession().then(({ data: { session: initialSession }, error }) => {
+      if (error) {
+        // Stale refresh token in AsyncStorage — clear it and start fresh
+        console.warn("[Auth] Invalid session, signing out:", error.message);
+        supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setBarberId(null);
+        setShopId(null);
+        setRole(null);
+        setLoading(false);
+        return;
+      }
       setSession(initialSession);
       setUser(initialSession?.user ?? null);
       if (!initialSession) {
